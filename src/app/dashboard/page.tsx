@@ -4,21 +4,9 @@ import { Header } from '@/components/layout/Header'
 import { WeekNavigator } from '@/components/dashboard/WeekNavigator'
 import { ContentHeader } from '@/components/dashboard/ContentHeader'
 import { VideoGrid } from '@/components/dashboard/VideoGrid'
+import { EmptyState } from '@/components/dashboard/EmptyState'
 
-const dummyVideos = [
-  {
-    id: '1',
-    title: 'Weekly Update - Sprint Planning',
-    thumbnail: '/placeholder.jpg',
-    duration: '3 min',
-    createdAt: 'Today',
-    views: 5,
-    comments: 2,
-    likes: 3,
-    isShared: true
-  },
-  // Add more dummy videos
-]
+const dummyVideos: any[] = [] // Set to empty array to test empty state
 
 export default function Dashboard() {
   return (
@@ -30,7 +18,11 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <WeekNavigator />
           <ContentHeader />
-          <VideoGrid videos={dummyVideos} />
+          {dummyVideos.length > 0 ? (
+            <VideoGrid videos={dummyVideos} />
+          ) : (
+            <EmptyState />
+          )}
         </div>
       </main>
     </div>

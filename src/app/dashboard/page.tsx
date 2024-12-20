@@ -1,22 +1,23 @@
 'use client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { WeekNavigator } from '@/components/dashboard/WeekNavigator'
 import { ContentHeader } from '@/components/dashboard/ContentHeader'
 import { VideoGrid } from '@/components/dashboard/VideoGrid'
 
 const dummyVideos = [
   {
     id: '1',
-    title: 'iOS Mobile Upload',
+    title: 'Weekly Update - Sprint Planning',
     thumbnail: '/placeholder.jpg',
-    duration: '1 min',
-    createdAt: '3 years ago',
-    views: 0,
-    comments: 0,
-    likes: 0,
-    isShared: false
+    duration: '3 min',
+    createdAt: 'Today',
+    views: 5,
+    comments: 2,
+    likes: 3,
+    isShared: true
   },
-  // Add more dummy videos as needed
+  // Add more dummy videos
 ]
 
 export default function Dashboard() {
@@ -27,6 +28,7 @@ export default function Dashboard() {
       
       <main className="ml-64 pt-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
+          <WeekNavigator />
           <ContentHeader />
           <VideoGrid videos={dummyVideos} />
         </div>

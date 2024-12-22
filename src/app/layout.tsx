@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'TeamZones',
   description: 'Asynchronous team updates made easy',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
 
 export default function RootLayout({

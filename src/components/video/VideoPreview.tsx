@@ -1,12 +1,6 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Button } from '../ui/button'
-import {
-  PlayIcon,
-  PauseIcon,
-  SpeakerWaveIcon,
-  SpeakerXMarkIcon,
-} from '@heroicons/react/24/solid'
 
 interface VideoPreviewProps {
   videoBlob: Blob
@@ -16,27 +10,37 @@ interface VideoPreviewProps {
 
 export function VideoPreview({ videoBlob, onConfirm, onRetry }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [duration, setDuration] = useState<number>(0)
+  const [currentTime, setCurrentTime] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause()
-      } else {
-        videoRef.current.play()
+  useEffect(() => {
+    if (videoBlob && videoRef.current) {
+      const videoUrl = URL.createObjectURL(videoBlob)
+      videoRef.current.src = videoUrl
+
+      // Handle video metadata loading
+      videoRef.current.onloadedmetadata = () => {
+        if (videoRef.current) {
+          setDuration(videoRef.current.duration)
+          setIsLoading(false)
+        }
       }
-      setIsPlaying(!isPlaying)
-    }
-  }
 
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted
-      setIsMuted(!isMuted)
+      // Handle video loading errors
+      videoRef.current.onerror = () => {
+        console.error('Error loading video preview')
+        setIsLoading(false)
+      }
+
+      return () => URL.revokeObjectURL(videoUrl)
     }
+  }, [videoBlob])
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   const handleTimeUpdate = () => {
@@ -45,77 +49,34 @@ export function VideoPreview({ videoBlob, onConfirm, onRetry }: VideoPreviewProp
     }
   }
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration)
-    }
-  }
-
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
-
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
+    <div className="space-y-4">
+      <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        )}
         <video
           ref={videoRef}
-          src={URL.createObjectURL(videoBlob)}
           className="w-full h-full"
+          controls
           onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
+          playsInline // Better mobile support
         />
-
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={togglePlay}
-              className="text-white hover:text-gray-200"
-            >
-              {isPlaying ? (
-                <PauseIcon className="w-6 h-6" />
-              ) : (
-                <PlayIcon className="w-6 h-6" />
-              )}
-            </button>
-
-            <button
-              onClick={toggleMute}
-              className="text-white hover:text-gray-200"
-            >
-              {isMuted ? (
-                <SpeakerXMarkIcon className="w-6 h-6" />
-              ) : (
-                <SpeakerWaveIcon className="w-6 h-6" />
-              )}
-            </button>
-
-            <div className="flex-1">
-              <div className="relative h-1 bg-gray-600 rounded">
-                <div
-                  className="absolute h-full bg-white rounded"
-                  style={{
-                    width: `${(currentTime / duration) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <span className="text-white text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-          </div>
-        </div>
       </div>
 
-      <div className="mt-6 flex justify-end gap-4">
+      <div className="flex items-center justify-between text-sm text-gray-500">
+        <span>{formatTime(currentTime)}</span>
+        <span>{formatTime(duration)}</span>
+      </div>
+
+      <div className="flex justify-end space-x-2">
         <Button onClick={onRetry} variant="secondary">
           Record Again
         </Button>
-        <Button onClick={onConfirm}>
-          Continue to Publish
+        <Button onClick={onConfirm} disabled={isLoading}>
+          Continue
         </Button>
       </div>
     </div>

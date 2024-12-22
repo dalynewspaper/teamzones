@@ -8,12 +8,14 @@ interface VideoRecordingButtonProps {
   children?: React.ReactNode;
   className?: string;
   variant?: 'primary' | 'secondary';
+  weekId: string;
 }
 
 export function VideoRecordingButton({ 
   children = 'Record Video',
   className,
-  variant = 'primary' 
+  variant = 'primary',
+  weekId 
 }: VideoRecordingButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -31,6 +33,7 @@ export function VideoRecordingButton({
       <RecordingModal 
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        weekId={weekId}
       />
     </>
   );

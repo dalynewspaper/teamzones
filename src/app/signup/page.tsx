@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { SocialSignIn } from '@/components/SocialSignIn'
+import { SocialSignIn } from '@/components/auth/SocialSignIn'
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('')

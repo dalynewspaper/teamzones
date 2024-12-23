@@ -1,105 +1,57 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Button } from '../ui/button'
+import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebase'
-import { addVideoToFirestore } from '@/lib/firestore'
-import type { Video } from '@/types/firestore'
+import { uploadVideo } from '@/services/videoService'
+import { Button } from '../ui/button'
 
 interface VideoPublishFormProps {
   videoBlob: Blob
+  weekId: string
   onSuccess: () => void
   onCancel: () => void
-  weekId: string
 }
 
-export function VideoPublishForm({ 
-  videoBlob, 
-  onSuccess, 
-  onCancel,
-  weekId 
+export function VideoPublishForm({
+  videoBlob,
+  weekId,
+  onSuccess,
+  onCancel
 }: VideoPublishFormProps) {
   const { user } = useAuth()
   const [title, setTitle] = useState('')
-  const [isPublic, setIsPublic] = useState(true)
+  const [visibility, setVisibility] = useState<'team' | 'private'>('team')
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [error, setError] = useState('')
-  const [duration, setDuration] = useState<number>(0)
-
-  useEffect(() => {
-    const calculateDuration = async () => {
-      const video = document.createElement('video')
-      video.preload = 'metadata'
-      
-      const durationPromise = new Promise<number>((resolve) => {
-        video.onloadedmetadata = () => resolve(video.duration)
-      })
-      
-      video.src = URL.createObjectURL(videoBlob)
-      const videoDuration = await durationPromise
-      setDuration(videoDuration)
-      URL.revokeObjectURL(video.src)
-    }
-
-    calculateDuration()
-  }, [videoBlob])
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) {
-      setError('You must be logged in to publish videos')
-      return
-    }
+    if (!user) return
 
     try {
       setIsUploading(true)
-      setError('')
+      setError(null)
 
-      const timestamp = Date.now()
-      const videoPath = `videos/${user.uid}/${weekId}/${timestamp}.webm`
-      const storageRef = ref(storage, videoPath)
-      
-      const metadata = {
-        contentType: 'video/webm',
-        customMetadata: {
-          userId: user.uid,
-          weekId,
-          duration: duration.toString(),
-          isPublic: isPublic.toString()
-        }
-      }
-      
-      const snapshot = await uploadBytes(storageRef, videoBlob, metadata)
-      const downloadURL = await getDownloadURL(snapshot.ref)
-
-      const now = new Date().toISOString()
-      
-      const videoData: Omit<Video, 'id'> = {
-        title,
-        url: downloadURL,
-        weekId,
-        isPublic,
-        createdAt: now,
-        updatedAt: now,
+      await uploadVideo({
+        file: videoBlob,
         userId: user.uid,
-        duration,
-        thumbnailUrl: '',
-      }
+        weekId,
+        title,
+        visibility,
+        onProgress: setUploadProgress
+      })
 
-      await addVideoToFirestore(videoData)
       onSuccess()
     } catch (err) {
-      console.error('Failed to publish video:', err)
-      setError('Failed to publish video. Please try again.')
+      setError('Failed to upload video. Please try again.')
+      console.error('Upload error:', err)
     } finally {
       setIsUploading(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
         <div className="p-4 bg-red-50 text-red-700 rounded-md">
           {error}
@@ -107,71 +59,60 @@ export function VideoPublishForm({
       )}
 
       <div>
-        <label 
-          htmlFor="title" 
-          className="block text-sm font-medium text-gray-700"
-        >
+        <label className="block text-sm font-medium text-gray-700">
           Title
         </label>
         <input
           type="text"
-          id="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          placeholder="Weekly update for Team A"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           required
-          disabled={isUploading}
         />
       </div>
 
       <div>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="isPublic"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            disabled={isUploading}
-          />
-          <label 
-            htmlFor="isPublic" 
-            className="ml-2 block text-sm text-gray-700"
-          >
-            Make this video visible to the entire team
-          </label>
-        </div>
+        <label className="block text-sm font-medium text-gray-700">
+          Visibility
+        </label>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value as 'team' | 'private')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        >
+          <option value="team">Visible to team</option>
+          <option value="private">Private</option>
+        </select>
       </div>
 
       {isUploading && (
         <div className="space-y-2">
-          <div className="relative h-2 bg-gray-200 rounded">
+          <div className="h-2 bg-gray-200 rounded-full">
             <div
-              className="absolute h-full bg-blue-600 rounded transition-all duration-300"
+              className="h-full bg-blue-600 rounded-full transition-all duration-150"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-500">
             Uploading... {Math.round(uploadProgress)}%
           </p>
         </div>
       )}
 
-      <div className="flex justify-end gap-4">
-        <Button 
-          type="button" 
-          onClick={onCancel} 
+      <div className="flex justify-end gap-3">
+        <Button
+          type="button"
+          onClick={onCancel}
           variant="secondary"
           disabled={isUploading}
         >
           Cancel
         </Button>
-        <Button 
+        <Button
           type="submit"
-          disabled={isUploading || !title.trim()}
+          disabled={isUploading || !title}
         >
-          {isUploading ? 'Publishing...' : 'Publish Video'}
+          Publish
         </Button>
       </div>
     </form>

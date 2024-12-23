@@ -6,8 +6,9 @@ import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+
 export function ProfileMenu() {
-const { user, logout } = useAuth()
+  const { user, signOut } = useAuth()
 
   return (
     <Menu as="div" className="relative">
@@ -37,7 +38,7 @@ const { user, logout } = useAuth()
           <Menu.Item>
             {({ active }) => (
               <button
-                onClick={() => signOut(auth)}
+                onClick={() => signOut()}
                 className={`${
                   active ? 'bg-gray-100' : ''
                 } block w-full px-4 py-2 text-left text-sm text-gray-700`}

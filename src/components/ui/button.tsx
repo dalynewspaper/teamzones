@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { ButtonHTMLAttributes, forwardRef } from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '@/lib/utils'
 import { VariantProps, cva } from 'class-variance-authority'
 
 const buttonVariants = cva(

@@ -1,22 +1,25 @@
 export interface Video {
-  id?: string
-  title: string
-  url: string
-  weekId: string
+  id: string
   userId: string
-  isPublic: boolean
-  createdAt: string
-  updatedAt: string
-  duration?: number
+  title: string
+  description?: string
+  transcript?: string
+  summary?: string
+  videoUrl: string
   thumbnailUrl?: string
+  createdAt: Date
+  updatedAt: Date
+  weekId: string
+  visibility: 'team' | 'private'
+  processingStatus: 'pending' | 'processing' | 'completed' | 'failed'
+  processedAt?: Date
 }
 
 export interface Week {
   id: string
-  startDate: string
-  endDate: string
-  goals?: string[]
-  summary?: string
+  startDate: Date
+  endDate: Date
+  videos: string[] // Array of video IDs
 }
 
 export interface Workspace {

@@ -1,18 +1,19 @@
+import { Timestamp, FieldValue } from 'firebase/firestore'
+
 export interface Video {
   id: string
   userId: string
   title: string
-  description?: string
-  transcript?: string
-  summary?: string
   videoUrl: string
-  thumbnailUrl?: string
-  createdAt: Date
-  updatedAt: Date
   weekId: string
   visibility: 'team' | 'private'
   processingStatus: 'pending' | 'processing' | 'completed' | 'failed'
-  processedAt?: Date
+  createdAt: Timestamp | FieldValue
+  updatedAt: Timestamp | FieldValue
+  transcript?: string
+  summary?: string
+  retryCount?: number
+  lastError?: string
 }
 
 export interface Week {

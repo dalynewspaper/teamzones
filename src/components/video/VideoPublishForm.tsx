@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { uploadVideo } from '@/services/videoService'
-import { Button } from '../ui/button'
 
 interface VideoPublishFormProps {
   videoBlob: Blob
@@ -26,25 +25,27 @@ export function VideoPublishForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user) {
+      setError('User not authenticated')
+      return
+    }
+
+    setIsUploading(true)
+    setError(null)
 
     try {
-      setIsUploading(true)
-      setError(null)
-
       await uploadVideo({
         file: videoBlob,
         userId: user.uid,
         weekId,
-        title,
+        title: title || `Weekly Update - ${new Date().toLocaleDateString()}`,
         visibility,
         onProgress: setUploadProgress
       })
-
       onSuccess()
     } catch (err) {
-      setError('Failed to upload video. Please try again.')
       console.error('Upload error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to upload video')
     } finally {
       setIsUploading(false)
     }
@@ -52,68 +53,49 @@ export function VideoPublishForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Form fields */}
       {error && (
         <div className="p-4 bg-red-50 text-red-700 rounded-md">
           {error}
         </div>
       )}
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Title
-        </label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          required
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Visibility
-        </label>
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value as 'team' | 'private')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        >
-          <option value="team">Visible to team</option>
-          <option value="private">Private</option>
-        </select>
-      </div>
-
+      
+      {/* Upload progress */}
       {isUploading && (
-        <div className="space-y-2">
-          <div className="h-2 bg-gray-200 rounded-full">
-            <div
-              className="h-full bg-blue-600 rounded-full transition-all duration-150"
+        <div className="relative pt-1">
+          <div className="flex mb-2 items-center justify-between">
+            <div>
+              <span className="text-xs font-semibold inline-block text-blue-600">
+                Uploading... {Math.round(uploadProgress)}%
+              </span>
+            </div>
+          </div>
+          <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-blue-200">
+            <div 
               style={{ width: `${uploadProgress}%` }}
+              className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500 transition-all duration-300"
             />
           </div>
-          <p className="text-sm text-gray-500">
-            Uploading... {Math.round(uploadProgress)}%
-          </p>
         </div>
       )}
-
-      <div className="flex justify-end gap-3">
-        <Button
+      
+      {/* Submit button */}
+      <div className="flex justify-end space-x-2">
+        <button
           type="button"
           onClick={onCancel}
-          variant="secondary"
           disabled={isUploading}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
         >
           Cancel
-        </Button>
-        <Button
+        </button>
+        <button
           type="submit"
-          disabled={isUploading || !title}
+          disabled={isUploading}
+          className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
         >
-          Publish
-        </Button>
+          {isUploading ? 'Uploading...' : 'Publish'}
+        </button>
       </div>
     </form>
   )

@@ -15,6 +15,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -22,6 +23,7 @@ export const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signIn: async () => {},
+  signInWithGoogle: async () => {},
   signOut: async () => {},
 })
 
@@ -48,7 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider()
-    await signInWithPopup(auth, provider)
+    try {
+      await signInWithPopup(auth, provider)
+    } catch (error) {
+      console.error('Google sign in error:', error)
+      throw error
+    }
   }
 
   const handleSignOut = async () => {
@@ -60,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, 
       loading, 
       signIn: handleSignIn,
+      signInWithGoogle,
       signOut: handleSignOut 
     }}>
       {!loading && children}

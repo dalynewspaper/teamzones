@@ -11,7 +11,7 @@ export default function SignInPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const { user, signIn } = useAuth()
+  const { user, signIn, signInWithGoogle } = useAuth()
 
   useEffect(() => {
     if (user) {
@@ -117,6 +117,10 @@ export default function SignInPage() {
                 </button>
               </div>
             </form>
+
+            <button onClick={signInWithGoogle}>
+              Sign in with Google
+            </button>
 
             <SocialSignIn />
           </div>

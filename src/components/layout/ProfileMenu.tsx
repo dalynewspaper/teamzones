@@ -2,26 +2,13 @@
 import { Fragment } from 'react'
 import { Menu, Transition } from '@headlessui/react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import {
-  UserCircleIcon,
-  Cog6ToothIcon,
-  ArrowRightOnRectangleIcon,
-} from '@heroicons/react/24/outline'
+import { UserCircleIcon } from '@heroicons/react/24/solid'
+import { signOut } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 export function ProfileMenu() {
-  const { user, logout } = useAuth()
-  const router = useRouter()
-
-  const handleSignOut = async () => {
-    try {
-      await logout()
-      router.push('/signin')
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
-  }
+  const { user, signOut } = useAuth()
 
   return (
     <Menu as="div" className="relative">
@@ -30,7 +17,7 @@ export function ProfileMenu() {
           <Image
             className="h-8 w-8 rounded-full"
             src={user.photoURL}
-            alt="Profile"
+            alt=""
             width={32}
             height={32}
           />
@@ -38,7 +25,6 @@ export function ProfileMenu() {
           <UserCircleIcon className="h-8 w-8 text-gray-400" />
         )}
       </Menu.Button>
-
       <Transition
         as={Fragment}
         enter="transition ease-out duration-100"
@@ -49,36 +35,14 @@ export function ProfileMenu() {
         leaveTo="transform opacity-0 scale-95"
       >
         <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-          <div className="px-4 py-2 text-sm text-gray-700">
-            <p className="font-medium">{user?.displayName || 'User'}</p>
-            <p className="text-gray-500 truncate">{user?.email}</p>
-          </div>
-
-          <hr className="my-1" />
-
-          <Menu.Item>
-            {({ active }) => (
-              <a
-                href="/settings"
-                className={`${
-                  active ? 'bg-gray-100' : ''
-                } flex px-4 py-2 text-sm text-gray-700 items-center`}
-              >
-                <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                Settings
-              </a>
-            )}
-          </Menu.Item>
-
           <Menu.Item>
             {({ active }) => (
               <button
-                onClick={handleSignOut}
+                onClick={() => signOut()}
                 className={`${
                   active ? 'bg-gray-100' : ''
-                } flex w-full px-4 py-2 text-sm text-gray-700 items-center`}
+                } block w-full px-4 py-2 text-left text-sm text-gray-700`}
               >
-                <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
                 Sign out
               </button>
             )}

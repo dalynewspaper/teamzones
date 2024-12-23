@@ -1,40 +1,14 @@
 'use client'
-import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { useWeek } from '@/contexts/WeekContext'
 
 export function WeekNavigator() {
-  const [currentWeek, setCurrentWeek] = useState(new Date())
-
-  const getWeekDates = (date: Date) => {
-    const start = new Date(date)
-    start.setDate(date.getDate() - date.getDay() + 1) // Monday
-    const end = new Date(start)
-    end.setDate(start.getDate() + 6) // Sunday
-
-    // Calculate the ISO week number
-    const target = new Date(date.valueOf())
-    const dayNumber = (date.getDay() + 6) % 7
-    target.setDate(target.getDate() - dayNumber + 3)
-    const firstThursday = target.valueOf()
-    target.setMonth(0, 1)
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7)
-    }
-    const weekNumber = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000)
-
-    return {
-      start,
-      end,
-      weekNumber
-    }
-  }
-
-  const { start, end, weekNumber } = getWeekDates(currentWeek)
+  const { weekId, setWeekId, weekNumber, weekYear, weekStart, weekEnd } = useWeek()
 
   const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentWeek)
-    newDate.setDate(currentWeek.getDate() + (direction === 'next' ? 7 : -7))
-    setCurrentWeek(newDate)
+    const date = new Date(direction === 'next' ? weekEnd : weekStart)
+    date.setDate(date.getDate() + (direction === 'next' ? 1 : -1))
+    setWeekId(`${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`)
   }
 
   const formatDate = (date: Date) => {
@@ -57,10 +31,10 @@ export function WeekNavigator() {
           </button>
           <div>
             <h2 className="text-lg font-semibold">
-              Week {weekNumber}, {currentWeek.getFullYear()}
+              Week {weekNumber}, {weekYear}
             </h2>
             <p className="text-sm text-gray-500">
-              {formatDate(start)} - {formatDate(end)}
+              {formatDate(weekStart)} - {formatDate(weekEnd)}
             </p>
           </div>
           <button

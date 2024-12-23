@@ -9,18 +9,23 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { auth } from '../lib/firebase'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
-  logout: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+})
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -35,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe
   }, [])
 
-  const signIn = async (email: string, password: string) => {
+  const handleSignIn = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password)
   }
 
@@ -45,10 +50,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider()
-    await signInWithPopup(auth, provider)
+    try {
+      await signInWithPopup(auth, provider)
+    } catch (error) {
+      console.error('Google sign in error:', error)
+      throw error
+    }
   }
 
-  const logout = async () => {
+  const handleSignOut = async () => {
     await signOut(auth)
   }
 
@@ -56,10 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
-      signIn, 
-      signUp, 
-      signInWithGoogle, 
-      logout 
+      signIn: handleSignIn,
+      signInWithGoogle,
+      signOut: handleSignOut 
     }}>
       {!loading && children}
     </AuthContext.Provider>

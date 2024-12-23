@@ -1,5 +1,6 @@
-import { initializeApp } from 'firebase/app'
+import { initializeApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
@@ -11,11 +12,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 }
 
-// Check if we have all required config values
-if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
-  throw new Error('Missing Firebase configuration values')
-}
+// Check if Firebase is not already initialized
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 
-const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const storage = getStorage(app) 
+export const db = getFirestore(app)
+export const storage = getStorage(app)

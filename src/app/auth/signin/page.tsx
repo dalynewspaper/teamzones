@@ -1,6 +1,6 @@
 'use client'
-import { signInWithPopup } from 'firebase/auth'
-import { auth, googleProvider } from '@/lib/firebase'
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,7 +17,7 @@ export default function SignIn() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithPopup(auth, googleProvider)
+      await signInWithPopup(auth, new GoogleAuthProvider())
       router.push('/')
     } catch (error) {
       console.error('Error signing in with Google:', error)

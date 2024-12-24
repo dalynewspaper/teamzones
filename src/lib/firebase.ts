@@ -20,9 +20,9 @@ const storage = getStorage(app)
 
 // Connect to emulators only in development and on client-side
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099')
-  connectFirestoreEmulator(db, '127.0.0.1', 8080)
-  connectStorageEmulator(storage, '127.0.0.1', 9199)
+  connectAuthEmulator(auth, 'http://localhost:9098')
+  connectFirestoreEmulator(db, 'localhost', 8081)
+  connectStorageEmulator(storage, 'localhost', 9198)
 }
 
 export { app, auth, db, storage }

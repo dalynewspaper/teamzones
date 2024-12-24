@@ -2,6 +2,9 @@ import { getDocuments, createDocument, updateDocument } from './firestoreService
 import { uploadFile } from './storageService';
 import type { Video } from '@/types/firestore';
 import { VideoError } from '@/lib/errors';
+import { storage } from '@/lib/firebase';
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 export async function getWeekVideos(weekId: string): Promise<Video[]> {
   return getDocuments<Video>('videos', {
@@ -26,8 +29,6 @@ export async function getUserVideos(userId: string): Promise<Video[]> {
     orderDirection: 'desc'
   });
 }
-
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 export async function uploadVideo(file: File, userId: string, weekId: string) {
   try {

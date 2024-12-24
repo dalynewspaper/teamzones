@@ -26,3 +26,9 @@ function getWeekNumber(date: Date) {
   const yearStart = new Date(d.getFullYear(), 0, 1);
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
+
+export function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}

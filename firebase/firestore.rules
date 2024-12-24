@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidTimestamp(timestamp) {
+      return timestamp is string &&
+             timestamp.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z$');
+    }
+
+    function hasValidTimestamps() {
+      let data = request.resource.data;
+      return isValidTimestamp(data.createdAt) && 
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Videos collection
+    match /videos/{videoId} {
+      function isValidVideo() {
+        let data = request.resource.data;
+        return data.keys().hasAll(['title', 'url', 'weekId', 'userId', 'status']) &&
+               data.userId == request.auth.uid &&
+               data.status in ['processing', 'ready', 'failed'] &&
+               hasValidTimestamps();
+      }
+
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidVideo();
+      allow update: if isOwner(resource.data.userId) && isValidVideo();
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      function isValidUser() {
+        let data = request.resource.data;
+        return data.keys().hasAll(['email', 'displayName', 'photoURL']) &&
+               data.email is string &&
+               (data.displayName == null || data.displayName is string) &&
+               (data.photoURL == null || data.photoURL is string) &&
+               hasValidTimestamps();
+      }
+
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId) && isValidUser();
+      allow delete: if false; // Prevent user deletion
+    }
+
+    // Weeks collection
+    match /weeks/{weekId} {
+      function isValidWeek() {
+        let data = request.resource.data;
+        return data.keys().hasAll(['startDate', 'endDate', 'status']) &&
+               data.status in ['active', 'archived'] &&
+               hasValidTimestamps();
+      }
+
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidWeek();
+    }
+  }
+}

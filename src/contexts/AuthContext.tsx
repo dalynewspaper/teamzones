@@ -1,84 +1,64 @@
 'use client'
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { 
-  User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup
-} from 'firebase/auth'
-import { auth } from '../lib/firebase'
+import { onAuthStateChanged, type User } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
+import { createUserProfile } from '@/services/userService'
+import { signInWithGoogle, signOut } from '@/services/authService'
+import { getApps } from 'firebase/app'
+import { LoadingPage } from '@/components/ui/loading-page'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
+  signInWithGoogle: typeof signInWithGoogle
+  signOut: typeof signOut
 }
 
-export const AuthContext = createContext<AuthContextType>({
+const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  signIn: async () => {},
-  signInWithGoogle: async () => {},
-  signOut: async () => {},
+  signInWithGoogle,
+  signOut
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const app = getApps()[0]
+    if (!app) {
+      setLoading(false)
+      throw new Error('Firebase is not initialized')
+    }
+    setInitialized(true)
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await createUserProfile(user)
+      }
       setUser(user)
       setLoading(false)
     })
 
-    return unsubscribe
+    return () => unsubscribe()
   }, [])
 
-  const handleSignIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password)
-  }
-
-  const signUp = async (email: string, password: string) => {
-    await createUserWithEmailAndPassword(auth, email, password)
-  }
-
-  const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider()
-    try {
-      await signInWithPopup(auth, provider)
-    } catch (error) {
-      console.error('Google sign in error:', error)
-      throw error
-    }
-  }
-
-  const handleSignOut = async () => {
-    await signOut(auth)
+  if (!initialized) {
+    return <LoadingPage />
   }
 
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading, 
-      signIn: handleSignIn,
+      loading,
       signInWithGoogle,
-      signOut: handleSignOut 
+      signOut
     }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-} 
+export const useAuth = () => useContext(AuthContext) 

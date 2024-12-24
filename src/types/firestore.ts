@@ -1,35 +1,31 @@
-import { Timestamp, FieldValue } from 'firebase/firestore'
-
-export interface Video {
-  id: string
-  userId: string
-  title: string
-  videoUrl: string
-  weekId: string
-  visibility: 'team' | 'private'
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed'
-  createdAt: Timestamp | FieldValue
-  updatedAt: Timestamp | FieldValue
-  transcript?: string
-  summary?: string
-  retryCount?: number
-  lastError?: string
+export interface BaseDocument {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Week {
-  id: string
-  startDate: Date
-  endDate: Date
-  videos: string[] // Array of video IDs
+export interface Video extends BaseDocument {
+  title: string;
+  url: string;
+  thumbnailUrl: string;
+  weekId: string;
+  userId: string;
+  status: 'processing' | 'ready' | 'failed';
+  duration?: number;
 }
 
-export interface Workspace {
-  id: string
-  name: string
-  members: {
-    [userId: string]: {
-      role: 'admin' | 'member'
-      joinedAt: string
-    }
-  }
+export interface Week extends BaseDocument {
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'archived';
+}
+
+export interface UserProfile extends BaseDocument {
+  email: string;
+  displayName: string | null;
+  photoURL: string | null;
+  settings?: {
+    emailNotifications: boolean;
+    theme: 'light' | 'dark' | 'system';
+  };
 } 

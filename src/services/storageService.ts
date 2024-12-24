@@ -1,12 +1,34 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { StorageError } from '@/lib/errors';
 
-export async function uploadFile(file: File, path: string): Promise<string> {
+export async function uploadFile(
+  blob: Blob,
+  path: string,
+  onProgress?: (progress: number) => void
+): Promise<string> {
   try {
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    const uploadTask = uploadBytesResumable(storageRef, blob);
+
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          onProgress?.(progress);
+        },
+        (error) => reject(error),
+        async () => {
+          try {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(url);
+          } catch (error) {
+            reject(error);
+          }
+        }
+      );
+    });
   } catch (error: any) {
     console.error('Storage error:', error);
     throw new StorageError(

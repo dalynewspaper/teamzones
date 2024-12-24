@@ -1,72 +1,75 @@
 'use client'
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { Week } from '@/types/firestore'
+import { getWeek } from '@/services/firestoreService'
+import { getCurrentWeekId } from '@/lib/date'
 
 interface WeekContextType {
+  currentWeek: Week | null
+  setCurrentWeek: (week: Week | null) => void
+  isLoading: boolean
+  error: Error | null
   weekId: string
   setWeekId: (weekId: string) => void
-  weekNumber: number
-  weekYear: number
-  weekStart: Date
-  weekEnd: Date
+  refreshWeek: () => void
 }
 
 const WeekContext = createContext<WeekContextType | undefined>(undefined)
 
 export function WeekProvider({ children }: { children: React.ReactNode }) {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  
-  // Get ISO week number and year
-  const getWeekData = (date: Date) => {
-    const target = new Date(date.valueOf())
-    const dayNumber = (date.getDay() + 6) % 7
-    target.setDate(target.getDate() - dayNumber + 3)
-    const firstThursday = target.valueOf()
-    target.setMonth(0, 1)
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7)
+  const [currentWeek, setCurrentWeek] = useState<Week | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [weekId, setWeekId] = useState(getCurrentWeekId())
+
+  useEffect(() => {
+    const loadWeek = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const week = await getWeek(weekId)
+        setCurrentWeek(week)
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to load week'))
+      } finally {
+        setIsLoading(false)
+      }
     }
-    const weekNumber = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000)
-    const weekYear = date.getFullYear()
 
-    // Calculate week start (Monday) and end (Sunday)
-    const weekStart = new Date(date)
-    weekStart.setDate(date.getDate() - dayNumber)
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 6)
+    loadWeek()
+  }, [weekId])
 
-    return {
-      weekNumber,
-      weekYear,
-      weekStart,
-      weekEnd,
-      weekId: `${weekYear}-W${weekNumber.toString().padStart(2, '0')}`
+  const refreshWeek = async () => {
+    if (!weekId) return
+    setIsLoading(true)
+    try {
+      const week = await getWeek(weekId)
+      setCurrentWeek(week)
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setIsLoading(false)
     }
-  }
-
-  const weekData = getWeekData(currentDate)
-
-  const value = {
-    weekId: weekData.weekId,
-    setWeekId: (weekId: string) => {
-      // Parse weekId (YYYY-WNN) and set the corresponding date
-      const [year, week] = weekId.split('-W')
-      const date = new Date(parseInt(year), 0, 1)
-      date.setDate(date.getDate() + (parseInt(week) - 1) * 7)
-      setCurrentDate(date)
-    },
-    weekNumber: weekData.weekNumber,
-    weekYear: weekData.weekYear,
-    weekStart: weekData.weekStart,
-    weekEnd: weekData.weekEnd
   }
 
   return (
-    <WeekContext.Provider value={value}>
+    <WeekContext.Provider 
+      value={{ 
+        currentWeek, 
+        setCurrentWeek, 
+        isLoading, 
+        error,
+        weekId,
+        setWeekId,
+        refreshWeek
+      }}
+    >
       {children}
     </WeekContext.Provider>
   )
 }
 
+// Export a single hook for accessing the week context
 export function useWeek() {
   const context = useContext(WeekContext)
   if (context === undefined) {

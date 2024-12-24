@@ -1,54 +1,40 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getWeekVideos } from '@/services/videoService';
-import { VideoPlayer } from './VideoPlayer';
-import { EmptyState } from '@/components/dashboard/EmptyState';
-import { Loading } from '@/components/ui/loading';
-import type { Video } from '@/types/firestore';
+import { VideoUpdate } from '@/types/firestore';
+import { useWeek } from '@/contexts/WeekContext';
 
-interface VideoListProps {
-  weekId: string;
-  onError?: (message: string) => void;
-}
+export function VideoList() {
+  const { weekId, currentWeek } = useWeek();
+  const videos = currentWeek?.videos || [];
 
-export function VideoList({ weekId, onError }: VideoListProps) {
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadVideos() {
-      try {
-        setLoading(true);
-        const weekVideos = await getWeekVideos(weekId);
-        setVideos(weekVideos);
-      } catch (error) {
-        console.error('Failed to load videos:', error);
-        onError?.('Failed to load videos. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadVideos();
-  }, [weekId, onError]);
-
-  if (loading) return <Loading />;
-  if (!videos.length) return <EmptyState weekId={weekId} />;
+  if (videos.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="mb-4">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No videos</h3>
+        <p className="mt-1 text-sm text-gray-500">Get started by recording your first video update.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {videos.map((video) => (
-        <div key={video.id} className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium">{video.title}</h3>
-            <span className="text-sm text-gray-500">
-              {new Date(video.createdAt).toLocaleDateString()}
-            </span>
-          </div>
-          <VideoPlayer 
+    <div className="space-y-4">
+      {videos.map((video: VideoUpdate) => (
+        <div key={video.id} className="bg-white shadow rounded-lg overflow-hidden">
+          <video 
             src={video.url} 
-            poster={video.thumbnailUrl} 
+            controls 
+            className="w-full"
           />
+          <div className="p-4">
+            <p className="text-sm text-gray-500">
+              Recorded on {new Date(video.createdAt).toLocaleDateString()}
+            </p>
+          </div>
         </div>
       ))}
     </div>

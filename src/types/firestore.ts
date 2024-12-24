@@ -18,6 +18,9 @@ export interface Week extends BaseDocument {
   startDate: string;
   endDate: string;
   status: 'active' | 'archived';
+  videos: VideoUpdate[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserProfile extends BaseDocument {
@@ -28,4 +31,21 @@ export interface UserProfile extends BaseDocument {
     emailNotifications: boolean;
     theme: 'light' | 'dark' | 'system';
   };
+}
+
+export interface VideoUpdate {
+  id: string;
+  url: string;
+  createdAt: string;
+  status: 'processing' | 'ready' | 'error';
+  weekId: string;
+  duration: number;
+}
+
+export interface Week {
+  id: string
+  startDate: string
+  endDate: string
+  videos: VideoUpdate[]
+  // ... other week fields
 } 

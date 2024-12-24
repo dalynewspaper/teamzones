@@ -1,8 +1,10 @@
-import { getDocuments, createDocument, updateDocument } from './firestoreService';
+import { getDocuments, createDocument, updateDocument, addVideoToWeek } from './firestoreService';
 import { uploadFile } from './storageService';
-import type { Video } from '@/types/firestore';
+import type { Video, VideoUpdate } from '@/types/firestore';
 import { VideoError } from '@/lib/errors';
 import { storage } from '@/lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getOrCreateWeek } from './weekService';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -30,51 +32,42 @@ export async function getUserVideos(userId: string): Promise<Video[]> {
   });
 }
 
-export async function uploadVideo(file: File, userId: string, weekId: string) {
+interface UploadProgressCallback {
+  (progress: number): void
+}
+
+export async function uploadVideo(
+  blob: Blob,
+  weekId: string,
+  onProgress?: (progress: number) => void
+): Promise<void> {
   try {
-    // Validate file
-    if (file.size > MAX_FILE_SIZE) {
-      throw new VideoError(
-        'File size exceeds 100MB limit',
-        'FILE_TOO_LARGE',
-        { size: file.size, maxSize: MAX_FILE_SIZE }
-      );
-    }
+    // First ensure the week exists
+    const week = await getOrCreateWeek(weekId);
 
-    if (!file.type.startsWith('video/')) {
-      throw new VideoError(
-        'Invalid file type. Please upload a video file.',
-        'INVALID_FILE_TYPE',
-        { type: file.type }
-      );
-    }
+    // Upload the video file
+    const fileName = `${Date.now()}.webm`;
+    const path = `videos/${weekId}/${fileName}`;
+    const url = await uploadFile(blob, path, onProgress);
 
-    // Upload to Firebase Storage
-    const path = `videos/${userId}/${weekId}/${Date.now()}-${file.name}`;
-    const url = await uploadFile(file, path);
-
-    // Create Firestore document
-    const video: Omit<Video, 'id'> = {
-      title: file.name,
+    // Create the video document
+    const video: VideoUpdate = {
+      id: fileName,
       url,
-      thumbnailUrl: '', // TODO: Generate thumbnail
-      weekId,
-      userId,
-      status: 'processing',
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status: 'processing',
+      weekId,
+      duration: 0
     };
 
-    const videoId = await createDocument('videos', video);
-    return { videoId, url };
+    // Add to week
+    await addVideoToWeek(weekId, video);
   } catch (error) {
-    console.error('Upload error:', error);
-    if (error instanceof VideoError) {
-      throw error;
-    }
+    console.error('Failed to upload video:', error);
     throw new VideoError(
-      'Failed to upload video. Please try again.',
-      'UPLOAD_FAILED'
+      'Failed to upload video',
+      'UPLOAD_FAILED',
+      { originalError: error }
     );
   }
 }

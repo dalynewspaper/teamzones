@@ -11,10 +11,12 @@ import {
   orderBy,
   type DocumentData,
   type QueryDocumentSnapshot,
-  type WhereFilterOp
+  type WhereFilterOp,
+  arrayUnion
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { BaseDocument } from '@/types/firestore';
+import { VideoUpdate, Week } from '@/types/firestore';
 
 export class FirestoreError extends Error {
   constructor(message: string, public code: string) {
@@ -162,4 +164,26 @@ export async function deleteDocument(
       error.code || 'DELETE_ERROR'
     );
   }
+}
+
+export async function addVideoToWeek(weekId: string, video: VideoUpdate) {
+  const weekRef = doc(db, 'weeks', weekId)
+  
+  // Add video to week's videos array
+  await updateDoc(weekRef, {
+    videos: arrayUnion(video)
+  })
+
+  return video
+}
+
+export async function getWeek(weekId: string): Promise<Week | null> {
+  const weekRef = doc(db, 'weeks', weekId)
+  const weekSnap = await getDoc(weekRef)
+  
+  if (!weekSnap.exists()) {
+    return null
+  }
+
+  return weekSnap.data() as Week
 } 

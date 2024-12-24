@@ -1,29 +1,19 @@
 {
   "emulators": {
     "auth": {
-      "port": 9098,
-      "host": "localhost"
+      "port": 9099
     },
     "firestore": {
-      "port": 8081,
-      "host": "localhost"
+      "port": 8080
     },
     "storage": {
-      "port": 9198,
-      "host": "localhost"
+      "port": 9199
     },
     "ui": {
-      "enabled": true,
-      "port": 4002,
-      "host": "localhost"
+      "port": 4000
     },
     "hub": {
-      "port": 4402,
-      "host": "localhost"
-    },
-    "logging": {
-      "port": 4502,
-      "host": "localhost"
+      "port": 4400
     }
   },
   "firestore": {

@@ -1,60 +1,67 @@
 'use client';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { Button } from '@/components/ui/button';
-import { getWeekDates } from '@/lib/date';
+import { useWeek } from '@/contexts/WeekContext';
 import { formatDate } from '@/lib/utils';
+import { getWeekDates } from '@/lib/date';
 
-interface WeekSelectorProps {
-  weekId: string;
-  onWeekChange: (weekId: string) => void;
-}
-
-export function WeekSelector({ weekId, onWeekChange }: WeekSelectorProps) {
-  const { start, end } = getWeekDates(weekId);
+export function WeekSelector() {
+  const { weekId, setWeekId, isLoading } = useWeek();
   
-  const changeWeek = (offset: number) => {
-    const date = new Date(start);
-    date.setDate(date.getDate() + offset * 7);
-    const weekNumber = getWeekNumber(date);
-    const newWeekId = `${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
-    onWeekChange(newWeekId);
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const [year, week] = weekId.split('-W').map(Number);
+    let newWeek = week + (direction === 'next' ? 1 : -1);
+    let newYear = year;
+    
+    if (newWeek > 52) {
+      newWeek = 1;
+      newYear++;
+    } else if (newWeek < 1) {
+      newWeek = 52;
+      newYear--;
+    }
+    
+    setWeekId(`${newYear}-W${newWeek.toString().padStart(2, '0')}`);
   };
 
+  const { start, end } = getWeekDates(weekId);
+
   return (
-    <div className="flex items-center space-x-4">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => changeWeek(-1)}
-      >
-        <ChevronLeftIcon className="h-4 w-4" />
-      </Button>
-      
-      <div className="text-sm">
-        <span className="font-medium">
-          {formatDate(start.toISOString())}
-        </span>
-        <span className="mx-2">-</span>
-        <span className="font-medium">
-          {formatDate(end.toISOString())}
-        </span>
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center space-x-4">
+        <button
+          onClick={() => navigateWeek('prev')}
+          disabled={isLoading}
+          className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-50"
+        >
+          <ChevronLeftIcon className="h-5 w-5" />
+        </button>
+        
+        <div>
+          <h2 className="text-lg font-semibold">
+            Week {weekId.split('-W')[1]}, {weekId.split('-W')[0]}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {formatDate(start.toString())} - {formatDate(end.toString())}
+          </p>
+        </div>
+
+        <button
+          onClick={() => navigateWeek('next')}
+          disabled={isLoading}
+          className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-50"
+        >
+          <ChevronRightIcon className="h-5 w-5" />
+        </button>
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => changeWeek(1)}
-      >
-        <ChevronRightIcon className="h-4 w-4" />
-      </Button>
+      <div className="flex items-center space-x-2">
+        <button className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+          View Report
+        </button>
+        <button className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+          Set Goals
+        </button>
+      </div>
     </div>
   );
-}
-
-function getWeekNumber(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 } 

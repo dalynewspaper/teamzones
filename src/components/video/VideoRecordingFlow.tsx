@@ -7,6 +7,7 @@ import { Alert } from '@/components/ui/alert'
 import { VideoError } from '@/lib/errors'
 import { Spinner } from '@/components/ui/spinner'
 import { uploadVideo } from '@/services/videoService'
+import { useWeek } from '@/contexts/WeekContext'
 
 interface VideoRecordingFlowProps {
   weekId: string
@@ -19,6 +20,7 @@ export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecord
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
+  const { refreshWeek } = useWeek()
 
   const handleUpload = async () => {
     if (!recordedBlob || !user) return
@@ -29,15 +31,14 @@ export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecord
       const file = new File([recordedBlob], `recording-${Date.now()}.webm`, { 
         type: 'video/webm' 
       })
-      await uploadVideo(file, user.uid, weekId)
+      await uploadVideo(file, weekId, (progress) => {
+        console.log(`Upload progress: ${progress}%`)
+      })
+      await refreshWeek()
       onComplete()
     } catch (err) {
       console.error('Upload failed:', err)
-      if (err instanceof VideoError) {
-        setError(err.message)
-      } else {
-        setError('An unexpected error occurred while uploading. Please try again.')
-      }
+      setError('Failed to upload video. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -82,7 +83,7 @@ export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecord
 
   return (
     <VideoRecorder 
-      onRecordingComplete={setRecordedBlob} 
+      onRecordingComplete={(blob) => setRecordedBlob(blob)}
       onCancel={onCancel}
     />
   )

@@ -1,47 +1,22 @@
 'use client'
-import { useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { WeekSelector } from '@/components/dashboard/WeekSelector'
 import { VideoList } from '@/components/video/VideoList'
 import { VideoRecordingButton } from '@/components/dashboard/VideoRecordingButton'
-import { ContentHeader } from '@/components/dashboard/ContentHeader'
-import { Alert } from '@/components/ui/alert'
-import { getCurrentWeekId } from '@/lib/date'
+import { useWeek } from '@/contexts/WeekContext'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
-  const [weekId] = useState(getCurrentWeekId())
-  const [error, setError] = useState<string | null>(null)
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <Alert type="error" title="Error">
-          {error}
-          <button 
-            onClick={() => setError(null)}
-            className="ml-2 text-sm underline"
-          >
-            Try again
-          </button>
-        </Alert>
-      </div>
-    )
-  }
+  const { weekId } = useWeek()
 
   return (
-    <div className="space-y-6">
-      <ContentHeader
-        title="Weekly Updates"
-        description={`Week of ${new Date(weekId).toLocaleDateString()}`}
-        action={
-          <VideoRecordingButton weekId={weekId} />
-        }
-      />
+    <div className="space-y-6 p-6">
+      <WeekSelector />
       
-      <VideoList 
-        weekId={weekId} 
-        onError={(message) => setError(message)}
-      />
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Weekly Updates</h1>
+        <VideoRecordingButton weekId={weekId} />
+      </div>
+
+      <VideoList />
     </div>
   )
 } 

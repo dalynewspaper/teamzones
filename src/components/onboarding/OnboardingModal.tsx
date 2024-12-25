@@ -2,21 +2,14 @@
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
 import { useOnboarding } from '@/contexts/OnboardingContext'
 import { OnboardingProgress } from './OnboardingProgress'
 import { TeamSetup } from './steps/TeamSetup'
 import { FirstUpdate } from './steps/FirstUpdate'
 
-const stepComponents = {
-  'team': TeamSetup,
-  'first-update': FirstUpdate
-}
-
 export function OnboardingModal() {
   const router = useRouter()
-  const { state, skipOnboarding } = useOnboarding()
-  const { currentStep, isComplete } = state
+  const { currentStep, isComplete, skipOnboarding } = useOnboarding()
 
   useEffect(() => {
     if (isComplete) {
@@ -24,14 +17,8 @@ export function OnboardingModal() {
     }
   }, [isComplete, router])
 
-  if (!state.shouldShow) {
-    return null
-  }
-
-  const isOptionalStep = state.currentStep === 'first-update'
-
   return (
-    <Sheet open={state.shouldShow} onOpenChange={() => {}}>
+    <Sheet open={!isComplete} onOpenChange={() => {}}>
       <SheetContent className="w-full max-w-xl">
         <SheetHeader>
           <SheetTitle>Welcome to TeamZones</SheetTitle>
@@ -40,11 +27,11 @@ export function OnboardingModal() {
         <OnboardingProgress />
 
         <div className="mt-6">
-          {state.currentStep === 'team' && <TeamSetup />}
-          {state.currentStep === 'first-update' && <FirstUpdate />}
+          {currentStep === 'team' && <TeamSetup />}
+          {currentStep === 'first-update' && <FirstUpdate />}
         </div>
 
-        {isOptionalStep && (
+        {currentStep === 'first-update' && (
           <div className="mt-6 text-center">
             <button
               onClick={skipOnboarding}

@@ -1,16 +1,7 @@
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { User } from 'firebase/auth';
 import type { UserProfile } from '@/types/firestore';
-
-interface UserProfile {
-  id: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
-  createdAt: string;
-  updatedAt: string;
-  onboardingCompleted: boolean;
-}
 
 export async function createUserProfile(user: User): Promise<void> {
   const userRef = doc(db, 'users', user.uid)
@@ -28,7 +19,8 @@ export async function createUserProfile(user: User): Promise<void> {
     photoURL: user.photoURL,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    onboardingCompleted: false
+    onboardingCompleted: false,
+    role: 'member' // Add default role
   }
   
   await setDoc(userRef, userProfile)
@@ -47,11 +39,16 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 
 export async function updateUserProfile(
   userId: string,
-  data: Partial<Omit<UserProfile, 'id' | 'email' | 'createdAt'>>
+  data: Partial<UserProfile>
 ): Promise<void> {
-  const docRef = doc(db, 'users', userId)
-  await setDoc(docRef, {
-    ...data,
-    updatedAt: new Date().toISOString()
-  }, { merge: true })
+  try {
+    const userRef = doc(db, 'users', userId)
+    await setDoc(userRef, {
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, { merge: true })
+  } catch (error) {
+    console.error('Error updating user profile:', error)
+    throw new Error('Failed to update user profile')
+  }
 } 

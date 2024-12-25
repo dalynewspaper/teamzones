@@ -1,27 +1,18 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
-interface SignOutButtonProps {
-  className?: string;
-}
-
-export function SignOutButton({ className }: SignOutButtonProps) {
-  const [loading, setLoading] = useState(false);
+export function SignOutButton() {
   const router = useRouter();
-  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
     try {
-      setLoading(true);
-      await signOut();
+      await signOut(auth);
       router.push('/signin');
     } catch (error) {
-      console.error('Sign out failed:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error signing out:', error);
     }
   };
 
@@ -29,10 +20,8 @@ export function SignOutButton({ className }: SignOutButtonProps) {
     <Button 
       variant="ghost" 
       onClick={handleSignOut}
-      disabled={loading}
-      className={className}
     >
-      {loading ? 'Signing out...' : 'Sign out'}
+      Sign Out
     </Button>
   );
 } 

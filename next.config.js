@@ -2,7 +2,10 @@
 const nextConfig = {
   output: 'standalone',
   images: {
-    domains: ['firebasestorage.googleapis.com'],
+    domains: [
+      'cdn.brandfetch.io',
+      'firebasestorage.googleapis.com',
+    ],
   },
 }
 

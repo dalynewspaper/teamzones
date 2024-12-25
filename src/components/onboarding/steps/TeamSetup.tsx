@@ -6,8 +6,9 @@ import { useOnboarding } from '@/contexts/OnboardingContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { createOrganization } from '@/services/organizationService'
 import { createTeam } from '@/services/teamService'
-import { fetchBrandInfo } from '@/services/brandService'
+import { fetchBrandAssets } from '@/services/brandService'
 import Image from 'next/image'
+import { updateUserProfile } from '@/services/userService'
 
 type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -64,7 +65,7 @@ interface BrandInfo {
 
 export function TeamSetup() {
   const { completeStep } = useOnboarding()
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -102,10 +103,17 @@ export function TeamSetup() {
 
       try {
         setIsFetchingBrand(true)
-        const info = await fetchBrandInfo(orgData.domain)
-        setBrandInfo(info)
-        if (info?.name && !orgData.name) {
-          setOrgData(d => ({ ...d, name: info.name }))
+        const info = await fetchBrandAssets(orgData.domain)
+        const brandInfo: BrandInfo = {
+          name: info.companyName || '',
+          domain: orgData.domain,
+          logo: info.logo,
+          icon: info.icon,
+          colors: info.colors
+        }
+        setBrandInfo(brandInfo)
+        if (brandInfo.name && !orgData.name) {
+          setOrgData(d => ({ ...d, name: brandInfo.name }))
         }
       } catch (error) {
         console.error('Error fetching brand info:', error)
@@ -119,32 +127,42 @@ export function TeamSetup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user) {
+      setError('You must be logged in to create an organization')
+      return
+    }
+
+    if (!orgData.name || !orgData.domain) {
+      setError('Organization name and domain are required')
+      return
+    }
 
     try {
       setLoading(true)
       setError(null)
 
-      // Filter out undefined values from branding
-      const branding = brandInfo ? {
-        ...(brandInfo.logo && { logo: brandInfo.logo }),
-        ...(brandInfo.icon && { icon: brandInfo.icon }),
-        ...(brandInfo.colors?.length && { colors: brandInfo.colors })
-      } : undefined
+      console.log('Starting organization creation...') // Debug log
 
       const organization = await createOrganization({
         name: orgData.name,
-        domain: orgData.domain,
+        domain: orgData.domain.toLowerCase(),
         ownerId: user.uid,
-        ...(branding && { branding }), // Only include if branding has values
+        branding: brandInfo ? {
+          logo: brandInfo.logo,
+          icon: brandInfo.icon,
+          colors: brandInfo.colors
+        } : undefined,
         settings: {
-          allowedDomains: [orgData.domain],
+          allowedDomains: [orgData.domain.toLowerCase()],
           weekStartDay: teamData.weekStartDay
-        }
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
 
-      // Then create the default team
-      await createTeam({
+      console.log('Organization created:', organization) // Debug log
+
+      const team = await createTeam({
         name: teamData.name,
         organizationId: organization.id,
         leaderId: user.uid,
@@ -152,13 +170,26 @@ export function TeamSetup() {
           userId: user.uid,
           role: 'admin',
           joinedAt: new Date().toISOString()
-        }]
+        }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
 
-      completeStep('team')
+      console.log('Team created:', team) // Debug log
+      
+      // Update user profile with organization ID
+      await updateUserProfile(user.uid, {
+        organizationId: organization.id,
+        teamId: team.id,
+        role: 'admin'
+      })
+
+      await refreshUser()
+      console.log('User profile updated') // Debug log
+      completeStep()
     } catch (err) {
       console.error('Setup error:', err)
-      setError('Failed to create team. Please try again.')
+      setError(err instanceof Error ? err.message : 'Failed to create team. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -232,13 +263,24 @@ export function TeamSetup() {
       </div>
 
       {error && (
-        <div className="text-sm text-red-600">
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
           {error}
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? 'Creating...' : 'Create Organization & Team'}
+      <Button 
+        type="submit"
+        disabled={loading || !orgData.name || !orgData.domain}
+        className="w-full"
+      >
+        {loading ? (
+          <div className="flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+            Creating...
+          </div>
+        ) : (
+          'Create Organization & Team'
+        )}
       </Button>
     </form>
   )

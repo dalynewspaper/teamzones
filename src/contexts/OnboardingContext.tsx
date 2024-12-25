@@ -1,106 +1,49 @@
 'use client'
-import { createContext, useContext, useState, useEffect } from 'react'
-import { useAuth } from './AuthContext'
-import { getUserProfile, updateUserProfile } from '@/services/userService'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { createContext, useContext, useState } from 'react'
 
-interface OnboardingState {
-  currentStep: 'team' | 'first-update'
-  isComplete: boolean
-  shouldShow: boolean
-}
+type StepId = 'team' | 'first-update'
 
 interface OnboardingContextType {
-  state: OnboardingState
-  completeStep: (step: OnboardingState['currentStep']) => Promise<void>
-  skipOnboarding: () => Promise<void>
+  currentStep: StepId
+  isComplete: boolean
+  completeStep: () => void
+  skipOnboarding: () => void
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const isNewUser = searchParams.get('newUser') === 'true'
-  
-  const [state, setState] = useState<OnboardingState>({
-    currentStep: 'team',
-    isComplete: false,
-    shouldShow: false
-  })
+  const [currentStep, setCurrentStep] = useState<StepId>('team')
+  const [isComplete, setIsComplete] = useState(false)
 
-  useEffect(() => {
-    async function checkOnboardingStatus() {
-      if (!user) return
-
-      const profile = await getUserProfile(user.uid)
-      
-      if (profile?.onboardingCompleted) {
-        setState(current => ({
-          ...current,
-          isComplete: true,
-          shouldShow: false
-        }))
-        return
-      }
-
-      setState(current => ({
-        ...current,
-        isComplete: false,
-        shouldShow: true
-      }))
-    }
-
-    if (user) {
-      checkOnboardingStatus()
-    }
-  }, [user, isNewUser])
-
-  const completeStep = async (step: OnboardingState['currentStep']) => {
-    if (!user) return
-
-    const steps: OnboardingState['currentStep'][] = ['team', 'first-update']
-    const currentIndex = steps.indexOf(step)
-    
-    if (currentIndex === steps.length - 1) {
-      await updateUserProfile(user.uid, {
-        onboardingCompleted: true,
-        updatedAt: new Date().toISOString()
-      })
-      setState({ currentStep: step, isComplete: true, shouldShow: false })
-      router.push('/dashboard')
+  const completeStep = () => {
+    if (currentStep === 'team') {
+      setCurrentStep('first-update')
     } else {
-      setState({ 
-        currentStep: steps[currentIndex + 1], 
-        isComplete: false, 
-        shouldShow: true 
-      })
+      setIsComplete(true)
     }
   }
 
-  const skipOnboarding = async () => {
-    if (!user || state.currentStep === 'team') return
-    
-    await updateUserProfile(user.uid, { 
-      onboardingCompleted: true,
-      updatedAt: new Date().toISOString()
-    })
-    setState({ currentStep: 'team', isComplete: true, shouldShow: false })
-    router.push('/dashboard')
+  const skipOnboarding = () => {
+    setIsComplete(true)
   }
 
   return (
-    <OnboardingContext.Provider value={{ state, completeStep, skipOnboarding }}>
+    <OnboardingContext.Provider value={{ 
+      currentStep, 
+      isComplete,
+      completeStep,
+      skipOnboarding
+    }}>
       {children}
     </OnboardingContext.Provider>
   )
 }
 
-export const useOnboarding = () => {
+export function useOnboarding() {
   const context = useContext(OnboardingContext)
-  if (context === undefined) {
-    throw new Error('useOnboarding must be used within an OnboardingProvider')
+  if (!context) {
+    throw new Error('useOnboarding must be used within OnboardingProvider')
   }
   return context
 } 

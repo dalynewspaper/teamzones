@@ -66,12 +66,12 @@ export interface Team {
   id: string
   name: string
   organizationId: string
-  createdAt: string
-  updatedAt: string
   leaderId: string
   members: {
     userId: string
     role: 'admin' | 'member'
     joinedAt: string
   }[]
+  createdAt: string
+  updatedAt: string
 } 

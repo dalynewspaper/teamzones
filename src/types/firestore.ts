@@ -8,8 +8,11 @@ export interface VideoUpdate {
   userId: string | undefined
   id: string
   url: string
+  thumbnailUrl?: string
+  title?: string
+  transcript?: string
   createdAt: string
-  status: 'processing' | 'ready' | 'error'
+  status: 'processing' | 'transcribing' | 'ready' | 'error'
   weekId: string
   duration: number
 }

@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase'
-import { doc, setDoc, collection } from 'firebase/firestore'
+import { doc, setDoc, collection, query, getDocs, where } from 'firebase/firestore'
 import type { Organization } from '@/types/firestore'
 
 export async function createOrganization(data: Omit<Organization, 'id' | 'createdAt' | 'updatedAt'>): Promise<Organization> {

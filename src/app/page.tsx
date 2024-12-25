@@ -2,13 +2,19 @@
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { useEffect } from 'react'
 
 export default function LandingPage() {
   const router = useRouter()
   const { user } = useAuth()
 
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard')
+    }
+  }, [user, router])
+
   if (user) {
-    router.push('/dashboard')
     return null
   }
 

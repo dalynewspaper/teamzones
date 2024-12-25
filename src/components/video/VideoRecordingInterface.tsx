@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -242,6 +243,14 @@ export function VideoRecordingInterface({
     }
   });
 
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   return (
     <div className="space-y-4" role="region" aria-label="Video recording interface">
       {/* Main Preview */}
@@ -379,8 +388,9 @@ export function VideoRecordingInterface({
       {/* Keyboard Shortcuts */}
       <div className="text-xs text-gray-500 flex items-center gap-4 justify-center">
         <span>Press R to record</span>
-        <span>Space to pause</span>
-        <span>Esc to stop</span>
+        <span>Press S to switch source</span>
+        <span>Press Space to pause</span>
+        <span>Press Esc to cancel</span>
       </div>
     </div>
   )

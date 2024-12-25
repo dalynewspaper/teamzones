@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react';
 import { VideoUpdate } from '@/types/firestore';
 import { useWeek } from '@/contexts/WeekContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function VideoList() {
   const { weekId, currentWeek } = useWeek();
-  const videos = currentWeek?.videos || [];
+  const { user } = useAuth();
+  const videos = currentWeek?.videos?.filter(v => v.userId === user?.uid) || [];
 
   if (videos.length === 0) {
     return (

@@ -22,4 +22,51 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [shortcuts])
+}
+
+interface RecordingShortcutsConfig {
+  isRecording: boolean
+  startRecording: () => void
+  stopRecording: () => void
+  togglePause: () => void
+  toggleScreenShare: () => void
+  toggleBackgroundBlur: () => void
+  cycleLayout: () => void
+}
+
+export const useRecordingShortcuts = ({
+  isRecording,
+  startRecording,
+  stopRecording,
+  togglePause,
+  toggleScreenShare,
+  toggleBackgroundBlur,
+  cycleLayout
+}: RecordingShortcutsConfig) => {
+  useKeyboardShortcuts({
+    'r': {
+      action: () => !isRecording && startRecording(),
+      description: 'Start recording'
+    },
+    'space': {
+      action: () => isRecording && togglePause(),
+      description: 'Pause/Resume recording'
+    },
+    'esc': {
+      action: () => isRecording && stopRecording(),
+      description: 'Stop recording'
+    },
+    's': {
+      action: () => !isRecording && toggleScreenShare(),
+      description: 'Toggle screen sharing'
+    },
+    'b': {
+      action: () => toggleBackgroundBlur(),
+      description: 'Toggle background blur'
+    },
+    'l': {
+      action: () => cycleLayout(),
+      description: 'Change layout'
+    }
+  })
 } 

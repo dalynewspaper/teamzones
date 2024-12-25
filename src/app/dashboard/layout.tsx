@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoadingPage } from '@/components/ui/loading-page';
 import { Header } from '@/components/dashboard/layout/Header';
 import { Sidebar } from '@/components/dashboard/layout/Sidebar';
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -37,6 +38,7 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+      <OnboardingModal />
     </div>
   );
 } 

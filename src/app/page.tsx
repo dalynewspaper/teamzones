@@ -1,48 +1,61 @@
 'use client'
-import React from 'react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { Button } from '@/components/ui/button'
 
 export default function LandingPage() {
+  const router = useRouter()
   const { user } = useAuth()
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <header className="px-6 py-4 border-b">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold">TeamZones</h1>
-          <Link href={user ? '/dashboard' : '/signin'}>
-            <Button>{user ? 'Go to Dashboard' : 'Sign In'}</Button>
-          </Link>
-        </div>
-      </header>
+  if (user) {
+    router.push('/dashboard')
+    return null
+  }
 
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto px-6 py-24">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-              Asynchronous team updates made easy
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600">
-              Record and share weekly updates with your team. Keep everyone in sync without scheduling more meetings.
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Link href={user ? '/dashboard' : '/signin'}>
-                <Button size="lg">
-                  {user ? 'Go to Dashboard' : 'Get Started'}
-                </Button>
-              </Link>
-            </div>
+  return (
+    <div className="min-h-screen flex flex-col">
+      <nav className="border-b px-4 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <h1 className="text-xl font-bold">TeamZones</h1>
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/signin')}
+            className="text-blue-600 hover:text-blue-500"
+          >
+            Sign In
+          </Button>
+        </div>
+      </nav>
+
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+        <div className="max-w-3xl mx-auto text-center space-y-8">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900">
+            Asynchronous team updates made easy
+          </h2>
+          <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto">
+            Record and share weekly updates with your team. Keep everyone in sync without scheduling more meetings.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              size="lg"
+              onClick={() => router.push('/signup')}
+            >
+              Get Started
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => router.push('/signin')}
+            >
+              Sign In
+            </Button>
           </div>
         </div>
       </main>
 
-      <footer className="border-t">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <p className="text-center text-sm text-gray-500">
-            © {new Date().getFullYear()} TeamZones. All rights reserved.
-          </p>
+      <footer className="border-t px-4 py-6">
+        <div className="max-w-7xl mx-auto text-center text-sm text-gray-500">
+          © {new Date().getFullYear()} TeamZones. All rights reserved.
         </div>
       </footer>
     </div>

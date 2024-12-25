@@ -1,26 +1,33 @@
 'use client'
-import { useAuth } from '@/contexts/AuthContext'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { Button } from '@/components/ui/button'
 
 export function SignOutButton() {
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { logout } = useAuth()
+  const { signOut } = useAuth()
 
   const handleSignOut = async () => {
     try {
-      await logout()
+      setLoading(true)
+      await signOut()
       router.push('/signin')
     } catch (error) {
-      console.error('Error signing out:', error)
+      console.error('Sign out failed:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <button
+    <Button 
+      variant="ghost" 
       onClick={handleSignOut}
-      className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700"
+      disabled={loading}
     >
-      Sign Out
-    </button>
+      {loading ? 'Signing out...' : 'Sign out'}
+    </Button>
   )
 } 

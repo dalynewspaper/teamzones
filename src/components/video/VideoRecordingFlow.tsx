@@ -1,13 +1,12 @@
 'use client'
 import { useState } from 'react'
-import { VideoRecorder } from './VideoRecorder'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { Alert } from '@/components/ui/alert'
-import { VideoError } from '@/lib/errors'
-import { Spinner } from '@/components/ui/spinner'
-import { uploadVideo } from '@/services/videoService'
+import { VideoRecordingInterface } from './VideoRecordingInterface'
 import { useWeek } from '@/contexts/WeekContext'
+import { storage, db } from '@/lib/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { v4 as uuidv4 } from 'uuid'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface VideoRecordingFlowProps {
   weekId: string
@@ -16,75 +15,57 @@ interface VideoRecordingFlowProps {
 }
 
 export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecordingFlowProps) {
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { user } = useAuth()
+  const [isUploading, setIsUploading] = useState(false)
   const { refreshWeek } = useWeek()
+  const { user } = useAuth()
 
-  const handleUpload = async () => {
-    if (!recordedBlob || !user) return
-
+  const handleRecordingComplete = async (blob: Blob) => {
+    if (!user) return
+    
     try {
-      setUploading(true)
-      setError(null)
-      const file = new File([recordedBlob], `recording-${Date.now()}.webm`, { 
-        type: 'video/webm' 
+      setIsUploading(true)
+      
+      const videoId = uuidv4()
+      const storageRef = ref(storage, `videos/${user.uid}/${weekId}/${videoId}.webm`)
+      await uploadBytes(storageRef, blob)
+      const url = await getDownloadURL(storageRef)
+
+      const weekRef = doc(db, 'weeks', weekId)
+      await updateDoc(weekRef, {
+        videos: arrayUnion({
+          id: videoId,
+          url,
+          createdAt: new Date().toISOString(),
+          status: 'ready',
+          weekId,
+          userId: user.uid,
+          duration: 0
+        }),
+        updatedAt: new Date().toISOString()
       })
-      await uploadVideo(file, weekId, (progress) => {
-        console.log(`Upload progress: ${progress}%`)
-      })
+
       await refreshWeek()
       onComplete()
-    } catch (err) {
-      console.error('Upload failed:', err)
-      setError('Failed to upload video. Please try again.')
+    } catch (error) {
+      console.error('Error uploading video:', error)
     } finally {
-      setUploading(false)
+      setIsUploading(false)
     }
   }
 
-  if (recordedBlob) {
-    return (
-      <div className="space-y-4">
-        {error && (
-          <Alert type="error" title="Upload Failed">
-            {error}
-          </Alert>
-        )}
-
-        <video 
-          src={URL.createObjectURL(recordedBlob)} 
-          controls 
-          className="w-full rounded-lg"
-        />
-        
-        <div className="flex justify-end gap-4">
-          <Button variant="outline" onClick={() => setRecordedBlob(null)}>
-            Record Again
-          </Button>
-          <Button 
-            onClick={handleUpload} 
-            disabled={uploading}
-          >
-            {uploading ? (
-              <>
-                <Spinner className="mr-2 h-4 w-4" />
-                Uploading...
-              </>
-            ) : (
-              'Upload Recording'
-            )}
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <VideoRecorder 
-      onRecordingComplete={(blob) => setRecordedBlob(blob)}
-      onCancel={onCancel}
-    />
+    <div className="space-y-4">
+      {isUploading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-sm text-gray-500">Uploading your video...</p>
+        </div>
+      ) : (
+        <VideoRecordingInterface
+          onRecordingComplete={handleRecordingComplete}
+          onCancel={onCancel}
+        />
+      )}
+    </div>
   )
 }

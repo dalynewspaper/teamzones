@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "next dev",
-    "build": "next build && next export",
+    "firebase:emulators": "firebase emulators:start",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -17,15 +18,17 @@
     "firebase": "^11.1.0",
     "firebase-admin": "^13.0.2",
     "lucide-react": "^0.469.0",
-    "next": "^14.0.0",
+    "next": "^15.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.6.0",
+    "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",

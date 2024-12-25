@@ -1,22 +1,26 @@
-'use client';
+'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { GoogleButton } from '@/components/auth/GoogleButton'
+import { createUserProfile } from '@/services/userService'
 import Image from 'next/image'
 import Link from 'next/link'
 
-export default function SignInPage() {
+export default function SignUpPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { authenticateWithGoogle } = useAuth()
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignUp = async () => {
     setIsLoading(true)
     try {
-      await authenticateWithGoogle()
-      router.push('/dashboard')
+      const user = await authenticateWithGoogle()
+      if (user) {
+        await createUserProfile(user)
+        router.push('/dashboard?newUser=true')
+      }
     } catch (err) {
       console.error('Authentication error:', err)
       setError('An unexpected error occurred. Please try again.')
@@ -45,14 +49,14 @@ export default function SignInPage() {
           {/* Hero Text */}
           <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Welcome back
+              Create your account
             </h1>
             <p className="mt-3 text-lg text-gray-500">
-              Record and share updates that move work forward
+              Join TeamZones to start sharing video updates with your team
             </p>
           </div>
 
-          {/* Sign In Card */}
+          {/* Sign Up Card */}
           <div className="bg-white shadow-xl rounded-2xl p-8">
             {error && (
               <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-600 text-sm">
@@ -61,19 +65,19 @@ export default function SignInPage() {
             )}
             
             <GoogleButton 
-              onClick={handleGoogleSignIn}
+              onClick={handleGoogleSignUp}
               loading={isLoading}
               className="w-full py-6 text-lg"
             />
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-500">
-                Don't have an account?{' '}
+                Already have an account?{' '}
                 <Link 
-                  href="/signup" 
+                  href="/signin" 
                   className="font-medium text-purple-600 hover:text-purple-500"
                 >
-                  Sign up for free
+                  Sign in
                 </Link>
               </p>
             </div>
@@ -84,20 +88,20 @@ export default function SignInPage() {
             <div className="text-center p-4">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-100 flex items-center justify-center">
                 <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900">Quick Updates</h3>
-              <p className="mt-2 text-sm text-gray-500">Record and share video updates in seconds</p>
+              <h3 className="text-lg font-medium text-gray-900">Secure Access</h3>
+              <p className="mt-2 text-sm text-gray-500">Your data is protected and private</p>
             </div>
             <div className="text-center p-4">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-100 flex items-center justify-center">
                 <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900">Team Sync</h3>
-              <p className="mt-2 text-sm text-gray-500">Keep your team aligned and informed</p>
+              <h3 className="text-lg font-medium text-gray-900">Instant Setup</h3>
+              <p className="mt-2 text-sm text-gray-500">Get started in seconds</p>
             </div>
           </div>
         </div>

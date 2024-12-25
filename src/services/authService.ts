@@ -1,27 +1,23 @@
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider,
-  signOut as firebaseSignOut
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { createUserProfile } from './userService';
-import { AuthError } from '@/lib/errors';
+'use client'
+import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 export async function signInWithGoogle() {
   try {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    await createUserProfile(result.user);
-    return result.user;
-  } catch (error: any) {
-    console.error('Google sign in error:', error);
-    throw new AuthError(
-      error.message || 'Failed to sign in with Google',
-      error.code || 'GOOGLE_SIGN_IN_FAILED'
-    );
+    const provider = new GoogleAuthProvider()
+    const result = await signInWithPopup(auth, provider)
+    return result.user
+  } catch (error) {
+    console.error('Google sign in error:', error)
+    throw error
   }
 }
 
 export async function signOut() {
-  return firebaseSignOut(auth);
+  try {
+    await firebaseSignOut(auth)
+  } catch (error) {
+    console.error('Sign out error:', error)
+    throw error
+  }
 }

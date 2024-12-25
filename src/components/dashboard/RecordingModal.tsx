@@ -8,12 +8,18 @@ interface RecordingModalProps {
   isOpen: boolean
   onClose: () => void
   weekId: string
+  onComplete?: () => void
 }
 
-export function RecordingModal({ isOpen, onClose, weekId }: RecordingModalProps) {
+export function RecordingModal({ isOpen, onClose, weekId, onComplete }: RecordingModalProps) {
+  const handleClose = () => {
+    onClose()
+    onComplete?.()
+  }
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog onClose={onClose} className="relative z-50">
+      <Dialog onClose={handleClose} className="relative z-50">
         {/* Backdrop */}
         <Transition.Child
           as={Fragment}
@@ -57,7 +63,7 @@ export function RecordingModal({ isOpen, onClose, weekId }: RecordingModalProps)
                 <div className="px-6 py-4">
                   <VideoRecordingFlow
                     weekId={weekId}
-                    onComplete={onClose}
+                    onComplete={handleClose}
                     onCancel={onClose}
                   />
                 </div>

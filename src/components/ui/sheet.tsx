@@ -54,8 +54,7 @@ SheetTitle.displayName = SheetPrimitive.Title.displayName
 export {
   Sheet,
   SheetTrigger,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
-} 
+}

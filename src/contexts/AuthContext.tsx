@@ -1,43 +1,23 @@
 'use client'
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged, type User } from 'firebase/auth'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { auth } from '@/lib/firebase'
-import { createUserProfile } from '@/services/userService'
-import { signInWithGoogle, signOut } from '@/services/authService'
-import { getApps } from 'firebase/app'
-import { LoadingPage } from '@/components/ui/loading-page'
+import { signInWithPopup, GoogleAuthProvider, User, signOut as firebaseSignOut } from 'firebase/auth'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signInWithGoogle: typeof signInWithGoogle
-  signOut: typeof signOut
+  authenticateWithGoogle: () => Promise<User | null>
+  signOut: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  signInWithGoogle,
-  signOut
-})
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    const app = getApps()[0]
-    if (!app) {
-      setLoading(false)
-      throw new Error('Firebase is not initialized')
-    }
-    setInitialized(true)
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await createUserProfile(user)
-      }
+    const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user)
       setLoading(false)
     })
@@ -45,15 +25,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  if (!initialized) {
-    return <LoadingPage />
+  const authenticateWithGoogle = async () => {
+    const provider = new GoogleAuthProvider()
+    const result = await signInWithPopup(auth, provider)
+    return result.user
+  }
+
+  const signOut = async () => {
+    await firebaseSignOut(auth)
   }
 
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading,
-      signInWithGoogle,
+      loading, 
+      authenticateWithGoogle,
       signOut
     }}>
       {children}
@@ -61,4 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export const useAuth = () => useContext(AuthContext) 
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
+} 

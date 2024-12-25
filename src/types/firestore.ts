@@ -52,6 +52,11 @@ export interface Organization {
     allowedDomains?: string[]
     weekStartDay: 0 | 1 | 2 | 3 | 4 | 5 | 6 // 0 = Sunday
   }
+  branding?: {
+    logo?: string;
+    icon?: string;
+    colors?: string[];
+  };
 }
 
 export interface Team {

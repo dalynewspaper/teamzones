@@ -6,6 +6,8 @@ import { useOnboarding } from '@/contexts/OnboardingContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { createOrganization } from '@/services/organizationService'
 import { createTeam } from '@/services/teamService'
+import { fetchBrandInfo } from '@/services/brandService'
+import Image from 'next/image'
 
 type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -52,6 +54,14 @@ function extractOrgInfo(email: string | null) {
   return { name, domain }
 }
 
+interface BrandInfo {
+  name: string;
+  domain: string;
+  logo?: string;
+  icon?: string;
+  colors?: string[];
+}
+
 export function TeamSetup() {
   const { completeStep } = useOnboarding()
   const { user } = useAuth()
@@ -79,6 +89,34 @@ export function TeamSetup() {
     weekStartDay: 1 as WeekStartDay
   })
 
+  const [brandInfo, setBrandInfo] = useState<BrandInfo | null>(null)
+  const [isFetchingBrand, setIsFetchingBrand] = useState(false)
+
+  // Auto-fetch brand info when domain changes
+  useEffect(() => {
+    async function getBrandInfo() {
+      if (!orgData.domain || COMMON_EMAIL_PROVIDERS.has(orgData.domain.toLowerCase())) {
+        setBrandInfo(null)
+        return
+      }
+
+      try {
+        setIsFetchingBrand(true)
+        const info = await fetchBrandInfo(orgData.domain)
+        setBrandInfo(info)
+        if (info?.name && !orgData.name) {
+          setOrgData(d => ({ ...d, name: info.name }))
+        }
+      } catch (error) {
+        console.error('Error fetching brand info:', error)
+      } finally {
+        setIsFetchingBrand(false)
+      }
+    }
+
+    getBrandInfo()
+  }, [orgData.domain])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
@@ -87,14 +125,21 @@ export function TeamSetup() {
       setLoading(true)
       setError(null)
 
-      // Create organization first
+      // Filter out undefined values from branding
+      const branding = brandInfo ? {
+        ...(brandInfo.logo && { logo: brandInfo.logo }),
+        ...(brandInfo.icon && { icon: brandInfo.icon }),
+        ...(brandInfo.colors?.length && { colors: brandInfo.colors })
+      } : undefined
+
       const organization = await createOrganization({
         name: orgData.name,
         domain: orgData.domain,
         ownerId: user.uid,
+        ...(branding && { branding }), // Only include if branding has values
         settings: {
           allowedDomains: [orgData.domain],
-          weekStartDay: teamData.weekStartDay // Now correctly typed
+          weekStartDay: teamData.weekStartDay
         }
       })
 
@@ -130,6 +175,19 @@ export function TeamSetup() {
         </div>
 
         <div className="space-y-4">
+          {brandInfo?.logo && (
+            <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="relative w-48 h-16">
+                <Image
+                  src={brandInfo.logo}
+                  alt={`${orgData.name} logo`}
+                  fill
+                  className="object-contain"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium">Organization Name</label>
             <Input
@@ -142,13 +200,20 @@ export function TeamSetup() {
 
           <div>
             <label className="block text-sm font-medium">Company Domain</label>
-            <Input
-              required
-              type="text"
-              value={orgData.domain}
-              onChange={(e) => setOrgData(d => ({ ...d, domain: e.target.value }))}
-              placeholder="acme.com"
-            />
+            <div className="relative">
+              <Input
+                required
+                type="text"
+                value={orgData.domain}
+                onChange={(e) => setOrgData(d => ({ ...d, domain: e.target.value }))}
+                placeholder="acme.com"
+              />
+              {isFetchingBrand && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent" />
+                </div>
+              )}
+            </div>
             <p className="mt-1 text-sm text-gray-500">
               This will be used to verify team members
             </p>

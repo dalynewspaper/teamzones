@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useOnboarding } from '@/contexts/OnboardingContext'
@@ -9,6 +9,49 @@ import { createTeam } from '@/services/teamService'
 
 type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+const COMMON_EMAIL_PROVIDERS = new Set([
+  'gmail.com',
+  'yahoo.com',
+  'yahoo.co.uk',
+  'hotmail.com',
+  'outlook.com',
+  'live.com',
+  'aol.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'msn.com',
+  'protonmail.com',
+  'proton.me',
+  'zoho.com',
+  'yandex.com',
+  'mail.com',
+  'gmx.com',
+  'fastmail.com'
+]);
+
+function extractOrgInfo(email: string | null) {
+  if (!email) return { name: '', domain: '' }
+  
+  const domain = email.split('@')[1]
+  if (!domain) return { name: '', domain: '' }
+
+  // Don't suggest organization name for common email providers
+  if (COMMON_EMAIL_PROVIDERS.has(domain.toLowerCase())) {
+    return { name: '', domain: '' }
+  }
+
+  // Convert domain to organization name
+  const name = domain
+    .split('.')[0]                     // Get first part of domain
+    .split('-').join(' ')             // Replace hyphens with spaces
+    .split('_').join(' ')             // Replace underscores with spaces
+    .replace(/\b\w/g, l => l.toUpperCase()) // Capitalize first letter of each word
+    .trim()
+
+  return { name, domain }
+}
+
 export function TeamSetup() {
   const { completeStep } = useOnboarding()
   const { user } = useAuth()
@@ -17,12 +60,23 @@ export function TeamSetup() {
   
   const [orgData, setOrgData] = useState({
     name: '',
-    domain: user?.email?.split('@')[1] || '' // Pre-fill domain from email
+    domain: ''
   })
   
+  // Auto-fill organization data from email
+  useEffect(() => {
+    if (user?.email) {
+      const { name, domain } = extractOrgInfo(user.email)
+      setOrgData({
+        name: name || '',
+        domain: domain || ''
+      })
+    }
+  }, [user?.email])
+  
   const [teamData, setTeamData] = useState({
-    name: '',
-    weekStartDay: 1 as WeekStartDay // Explicitly type as WeekStartDay
+    name: 'Leadership Team', // Default team name
+    weekStartDay: 1 as WeekStartDay
   })
 
   const handleSubmit = async (e: React.FormEvent) => {

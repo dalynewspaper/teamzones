@@ -1,97 +1,155 @@
 'use client'
 import { createContext, useContext, useState, useEffect } from 'react'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { Week } from '@/types/firestore'
+import { collection, query, where, getDocs, orderBy, addDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { Week } from '@/types/firestore'
-import { getWeekDates } from '@/lib/date'
+import { format, startOfWeek, endOfWeek } from 'date-fns'
 
 interface WeekContextType {
   weekId: string
-  setWeekId: (weekId: string) => void
+  setWeekId: (id: string) => void
   currentWeek: Week | null
-  setCurrentWeek: (week: Week | null) => void
-  isLoading: boolean
+  loading: boolean
   error: Error | null
-  refreshWeek: () => Promise<void>
   weekNumber: number
   weekYear: number
   weekStart: Date
   weekEnd: Date
+  refreshWeek: () => Promise<void>
 }
 
 const WeekContext = createContext<WeekContextType | undefined>(undefined)
 
 export function WeekProvider({ children }: { children: React.ReactNode }) {
+  const [weekId, setWeekId] = useState(() => {
+    const today = new Date()
+    const weekNumber = format(today, 'I')
+    const year = format(today, 'yyyy')
+    return `${year}-W${weekNumber.padStart(2, '0')}`
+  })
   const [currentWeek, setCurrentWeek] = useState<Week | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-  const [weekId, setWeekId] = useState(getCurrentWeekId())
-
-  const [year, week] = weekId.split('-W').map(Number)
-  const { start: weekStart, end: weekEnd } = getWeekDates(weekId)
-
-  const refreshWeek = async () => {
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, 'weeks', weekId)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setCurrentWeek(docSnap.data() as Week)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to refresh week'))
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   useEffect(() => {
-    const loadWeek = async () => {
+    async function fetchWeek() {
       try {
-        setIsLoading(true)
+        setLoading(true)
         setError(null)
-        const docRef = doc(db, 'weeks', weekId)
-        const docSnap = await getDoc(docRef)
+
+        // Parse weekId to get dates
+        const [year, week] = weekId.split('-W')
+        const date = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7)
+        const start = startOfWeek(date, { weekStartsOn: 1 }) // Monday
+        const end = endOfWeek(date, { weekStartsOn: 1 }) // Sunday
+
+        // Query Firestore
+        const weeksRef = collection(db, 'weeks')
+        const q = query(
+          weeksRef,
+          where('startDate', '>=', start.toISOString()),
+          where('startDate', '<=', end.toISOString()),
+          orderBy('startDate', 'desc'),
+        )
+
+        const snapshot = await getDocs(q)
         
-        if (docSnap.exists()) {
-          setCurrentWeek(docSnap.data() as Week)
-        } else {
-          // Initialize new week
-          const newWeek: Week = {
-            id: weekId,
-            startDate: weekStart.toISOString(),
-            endDate: weekEnd.toISOString(),
+        if (snapshot.empty) {
+          // Create new week if it doesn't exist
+          const newWeek: Omit<Week, 'id'> = {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            status: 'active',
             videos: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            status: 'active'
           }
-          await setDoc(docRef, newWeek)
-          setCurrentWeek(newWeek)
+
+          // Add week to Firestore
+          const docRef = await addDoc(collection(db, 'weeks'), newWeek)
+          setCurrentWeek({ ...newWeek, id: docRef.id })
+        } else {
+          const weekData = snapshot.docs[0].data() as Omit<Week, 'id'>
+          setCurrentWeek({ ...weekData, id: snapshot.docs[0].id })
         }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to load week'))
+        setError(err instanceof Error ? err : new Error('Failed to fetch week'))
       } finally {
-        setIsLoading(false)
+        setLoading(false)
       }
     }
 
-    loadWeek()
+    fetchWeek()
   }, [weekId])
 
+  // Add these computed values
+  const [year, week] = weekId.split('-W')
+  const date = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7)
+  const weekStart = startOfWeek(date, { weekStartsOn: 1 })
+  const weekEnd = endOfWeek(date, { weekStartsOn: 1 })
+
+  const refreshWeek = async () => {
+    const fetchWeek = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Parse weekId to get dates
+        const [year, week] = weekId.split('-W')
+        const date = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7)
+        const start = startOfWeek(date, { weekStartsOn: 1 }) // Monday
+        const end = endOfWeek(date, { weekStartsOn: 1 }) // Sunday
+
+        // Query Firestore
+        const weeksRef = collection(db, 'weeks')
+        const q = query(
+          weeksRef,
+          where('startDate', '>=', start.toISOString()),
+          where('startDate', '<=', end.toISOString()),
+          orderBy('startDate', 'desc'),
+        )
+
+        const snapshot = await getDocs(q)
+        
+        if (snapshot.empty) {
+          // Create new week if it doesn't exist
+          const newWeek: Omit<Week, 'id'> = {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            status: 'active',
+            videos: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+
+          // Add week to Firestore
+          const docRef = await addDoc(collection(db, 'weeks'), newWeek)
+          setCurrentWeek({ ...newWeek, id: docRef.id })
+        } else {
+          const weekData = snapshot.docs[0].data() as Omit<Week, 'id'>
+          setCurrentWeek({ ...weekData, id: snapshot.docs[0].id })
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch week'))
+      } finally {
+        setLoading(false)
+      }
+    }
+    await fetchWeek()
+  }
+
   return (
-    <WeekContext.Provider value={{
-      weekId,
-      setWeekId,
-      currentWeek,
-      setCurrentWeek,
-      isLoading,
+    <WeekContext.Provider value={{ 
+      weekId, 
+      setWeekId, 
+      currentWeek, 
+      loading, 
       error,
-      refreshWeek,
-      weekNumber: week,
-      weekYear: year,
+      weekNumber: parseInt(week),
+      weekYear: parseInt(year),
       weekStart,
-      weekEnd
+      weekEnd,
+      refreshWeek
     }}>
       {children}
     </WeekContext.Provider>
@@ -100,15 +158,8 @@ export function WeekProvider({ children }: { children: React.ReactNode }) {
 
 export function useWeek() {
   const context = useContext(WeekContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useWeek must be used within a WeekProvider')
   }
   return context
-}
-
-function getCurrentWeekId(): string {
-  const now = new Date()
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
-  const weekNumber = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7)
-  return `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`
 } 

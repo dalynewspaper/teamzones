@@ -2,57 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-    
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // Users collection
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(userId);
-    }
-
-    // Weeks collection
-    match /weeks/{weekId} {
-      // Allow reading weeks
-      allow read: if isSignedIn();
-      
-      // Allow creating/updating weeks with proper video ownership
-      allow update: if isSignedIn() && 
-        // Ensure new videos have correct userId
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['videos']) ||
-        request.resource.data.videos.hasOnly(resource.data.videos) ||
-        request.resource.data.videos.removeAll(resource.data.videos).hasOnly([{
-          userId: request.auth.uid
-        }]));
-    }
-
-    // Videos storage rules should match these Firestore rules
-    match /videos/{userId}/{videoId} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(userId);
-    }
-
-    match /organizations/{orgId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && 
-        (resource.data.ownerId == request.auth.uid || 
-         resource.data.members[request.auth.uid].role == 'admin');
-    }
-
-    match /teams/{teamId} {
-      allow read: if isSignedIn() && 
-        (resource.data.members[request.auth.uid] != null);
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && 
-        (resource.data.leaderId == request.auth.uid || 
-         resource.data.members[request.auth.uid].role == 'admin');
+      allow create, read, update: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

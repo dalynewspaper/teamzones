@@ -2,102 +2,109 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import { getUserProfile, updateUserProfile } from '@/services/userService'
-import { useSearchParams, useRouter } from 'next/navigation'
 
-interface OnboardingState {
-  currentStep: 'team' | 'first-update'
-  isComplete: boolean
-  shouldShow: boolean
-}
+type OnboardingStep = 'user-info' | 'organization' | 'first-update'
 
 interface OnboardingContextType {
-  state: OnboardingState
-  completeStep: (step: OnboardingState['currentStep']) => Promise<void>
-  skipOnboarding: () => Promise<void>
+  currentStep: OnboardingStep
+  completeStep: (step: OnboardingStep) => void
+  isComplete: boolean
+  showOnboarding: boolean
+  refreshOnboarding: () => Promise<void>
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
 
+const ONBOARDING_STEPS: OnboardingStep[] = ['user-info', 'organization', 'first-update']
+
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const isNewUser = searchParams.get('newUser') === 'true'
-  
-  const [state, setState] = useState<OnboardingState>({
-    currentStep: 'team',
-    isComplete: false,
-    shouldShow: false
-  })
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('user-info')
+  const [isComplete, setIsComplete] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [isChecking, setIsChecking] = useState(true)
 
-  useEffect(() => {
-    async function checkOnboardingStatus() {
-      if (!user) return
+  const checkOnboardingStatus = async () => {
+    if (!user) {
+      setShowOnboarding(false)
+      setIsComplete(false)
+      setCurrentStep('user-info')
+      setIsChecking(false)
+      return
+    }
 
+    try {
+      setIsChecking(true)
       const profile = await getUserProfile(user.uid)
       
-      if (profile?.onboardingCompleted) {
-        setState(current => ({
-          ...current,
-          isComplete: true,
-          shouldShow: false
-        }))
-        return
+      if (!profile || !profile.onboardingCompleted) {
+        // Immediately show onboarding for new users or incomplete onboarding
+        setShowOnboarding(true)
+        setIsComplete(false)
+        setCurrentStep('user-info')
+      } else {
+        // User has completed onboarding
+        setShowOnboarding(false)
+        setIsComplete(true)
       }
-
-      setState(current => ({
-        ...current,
-        isComplete: false,
-        shouldShow: true
-      }))
-    }
-
-    if (user) {
-      checkOnboardingStatus()
-    }
-  }, [user, isNewUser])
-
-  const completeStep = async (step: OnboardingState['currentStep']) => {
-    if (!user) return
-
-    const steps: OnboardingState['currentStep'][] = ['team', 'first-update']
-    const currentIndex = steps.indexOf(step)
-    
-    if (currentIndex === steps.length - 1) {
-      await updateUserProfile(user.uid, {
-        onboardingCompleted: true,
-        updatedAt: new Date().toISOString()
-      })
-      setState({ currentStep: step, isComplete: true, shouldShow: false })
-      router.push('/dashboard')
-    } else {
-      setState({ 
-        currentStep: steps[currentIndex + 1], 
-        isComplete: false, 
-        shouldShow: true 
-      })
+    } catch (error) {
+      console.error('Error checking onboarding status:', error)
+      // Show onboarding on error to be safe
+      setShowOnboarding(true)
+      setIsComplete(false)
+      setCurrentStep('user-info')
+    } finally {
+      setIsChecking(false)
     }
   }
 
-  const skipOnboarding = async () => {
-    if (!user || state.currentStep === 'team') return
-    
-    await updateUserProfile(user.uid, { 
-      onboardingCompleted: true,
-      updatedAt: new Date().toISOString()
-    })
-    setState({ currentStep: 'team', isComplete: true, shouldShow: false })
-    router.push('/dashboard')
+  // Run checkOnboardingStatus whenever user changes
+  useEffect(() => {
+    checkOnboardingStatus()
+  }, [user])
+
+  // Don't render children until we've checked onboarding status
+  if (isChecking) {
+    return null
+  }
+
+  const completeStep = async (step: OnboardingStep) => {
+    const currentIndex = ONBOARDING_STEPS.indexOf(step)
+    if (currentIndex === -1) return
+
+    const nextStep = ONBOARDING_STEPS[currentIndex + 1]
+    if (nextStep) {
+      setCurrentStep(nextStep)
+    } else {
+      setIsComplete(true)
+      setShowOnboarding(false)
+      if (user) {
+        try {
+          await updateUserProfile(user.uid, {
+            onboardingCompleted: true,
+            updatedAt: new Date().toISOString()
+          })
+        } catch (error) {
+          console.error('Error updating onboarding status:', error)
+        }
+      }
+    }
   }
 
   return (
-    <OnboardingContext.Provider value={{ state, completeStep, skipOnboarding }}>
+    <OnboardingContext.Provider value={{ 
+      currentStep, 
+      completeStep, 
+      isComplete, 
+      showOnboarding,
+      refreshOnboarding: checkOnboardingStatus 
+    }}>
       {children}
     </OnboardingContext.Provider>
   )
 }
 
-export const useOnboarding = () => {
+export function useOnboarding() {
   const context = useContext(OnboardingContext)
   if (context === undefined) {
     throw new Error('useOnboarding must be used within an OnboardingProvider')

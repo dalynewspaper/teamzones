@@ -12,15 +12,19 @@ interface VideoRecordingFlowProps {
   weekId: string
   onComplete: () => void
   onCancel: () => void
+  onError?: (message: string) => void
 }
 
-export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecordingFlowProps) {
+export function VideoRecordingFlow({ weekId, onComplete, onCancel, onError }: VideoRecordingFlowProps) {
   const [isUploading, setIsUploading] = useState(false)
   const { refreshWeek } = useWeek()
   const { user } = useAuth()
 
   const handleRecordingComplete = async (blob: Blob) => {
-    if (!user) return
+    if (!user) {
+      onError?.('User not authenticated')
+      return
+    }
     
     try {
       setIsUploading(true)
@@ -48,9 +52,14 @@ export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecord
       onComplete()
     } catch (error) {
       console.error('Error uploading video:', error)
+      onError?.('Failed to upload video. Please try again.')
     } finally {
       setIsUploading(false)
     }
+  }
+
+  const handleRecordingError = (message: string) => {
+    onError?.(message)
   }
 
   return (
@@ -64,6 +73,7 @@ export function VideoRecordingFlow({ weekId, onComplete, onCancel }: VideoRecord
         <VideoRecordingInterface
           onRecordingComplete={handleRecordingComplete}
           onCancel={onCancel}
+          onError={handleRecordingError}
         />
       )}
     </div>

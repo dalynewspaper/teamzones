@@ -21,14 +21,23 @@ export interface Week extends BaseDocument {
   videos: VideoUpdate[]
 }
 
-export interface UserProfile extends BaseDocument {
+export interface UserProfile {
+  id: string
   email: string
-  displayName: string | null
-  photoURL: string | null
-  onboardingCompleted?: boolean
-  role: 'admin' | 'member'
+  displayName: string
+  title?: string
+  photoURL?: string
+  createdAt: string
+  updatedAt: string
   organizationId?: string
   teamId?: string
+  timezone?: string
+  lastActive?: string
+  onboardingCompleted: boolean
+  settings?: {
+    theme?: 'light' | 'dark' | 'system'
+    emailNotifications?: boolean
+  }
 }
 
 export interface Video extends BaseDocument {
@@ -45,27 +54,28 @@ export interface Organization {
   id: string
   name: string
   domain: string
+  employeeCount: string
+  ownerId: string
   createdAt: string
   updatedAt: string
-  ownerId: string
-  settings?: {
-    allowedDomains?: string[]
-    weekStartDay: 0 | 1 | 2 | 3 | 4 | 5 | 6 // 0 = Sunday
+  settings: {
+    allowedDomains: string[]
+    weekStartDay: number
   }
   branding?: {
-    logo?: string;
-    icon?: string;
-    colors?: string[];
-  };
+    logo?: string
+    icon?: string
+    colors?: string[]
+  }
 }
 
 export interface Team {
   id: string
   name: string
   organizationId: string
+  ownerId: string
   createdAt: string
   updatedAt: string
-  leaderId: string
   members: {
     userId: string
     role: 'admin' | 'member'

@@ -1,18 +1,20 @@
 import { db } from '@/lib/firebase'
-import { doc, setDoc, collection } from 'firebase/firestore'
-import type { Organization } from '@/types/firestore'
+import { doc, collection, setDoc, query, where, getDocs } from 'firebase/firestore'
+import { Organization } from '@/types/firestore'
 
-export async function createOrganization(data: Omit<Organization, 'id' | 'createdAt' | 'updatedAt'>): Promise<Organization> {
-  const orgRef = doc(collection(db, 'organizations'))
+export async function createOrganization(data: Omit<Organization, 'id' | 'createdAt' | 'updatedAt'>) {
+  const organizationsRef = collection(db, 'organizations')
+  const organizationRef = doc(organizationsRef)
+  const now = new Date().toISOString()
   
   const organization: Organization = {
-    id: orgRef.id,
-    ...data,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    id: organizationRef.id,
+    createdAt: now,
+    updatedAt: now,
+    ...data
   }
 
-  await setDoc(orgRef, organization)
+  await setDoc(organizationRef, organization)
   return organization
 }
 

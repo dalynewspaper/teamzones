@@ -9,6 +9,7 @@ import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog'
 import { RecordingSettings } from './RecordingSettings'
 import { useRecordingShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { KeyboardShortcutsLegend } from './KeyboardShortcutsLegend'
+import { Alert } from '@/components/ui/alert'
 
 interface VideoDevice {
   deviceId: string
@@ -18,9 +19,10 @@ interface VideoDevice {
 interface VideoRecordingInterfaceProps {
   onRecordingComplete: (blob: Blob) => void
   onCancel: () => void
+  onError?: (message: string) => void
 }
 
-export function VideoRecordingInterface({ onRecordingComplete, onCancel }: VideoRecordingInterfaceProps) {
+export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError }: VideoRecordingInterfaceProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -31,6 +33,8 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
   const [resolution, setResolution] = useState<'720p' | '1080p'>('720p')
   const [backgroundBlur, setBackgroundBlur] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasPermissions, setHasPermissions] = useState(false)
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -39,11 +43,26 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
   const timerRef = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
-    loadDevices()
+    checkPermissions()
     return () => {
       stopStream()
     }
   }, [])
+
+  const checkPermissions = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      stream.getTracks().forEach(track => track.stop())
+      setHasPermissions(true)
+      await loadDevices()
+    } catch (err) {
+      console.error('Permission error:', err)
+      const message = 'Camera access is required. Please allow access in your browser settings.'
+      setError(message)
+      onError?.(message)
+      setHasPermissions(false)
+    }
+  }
 
   const loadDevices = async () => {
     try {
@@ -57,37 +76,72 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
       setDevices(videoDevices)
       if (videoDevices.length > 0) {
         setSelectedDeviceId(videoDevices[0].deviceId)
+      } else {
+        const message = 'No video devices found'
+        setError(message)
+        onError?.(message)
       }
     } catch (error) {
       console.error('Error loading devices:', error)
+      const message = 'Failed to load video devices'
+      setError(message)
+      onError?.(message)
     }
   }
 
   const startRecording = async () => {
     try {
+      setError(null)
       let stream: MediaStream
+
       if (isScreenSharing) {
-        stream = await navigator.mediaDevices.getDisplayMedia({ 
-          video: true,
-          audio: true
-        })
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: true,
+            audio: true
+          })
+        } catch (err) {
+          console.error('Screen sharing error:', err)
+          const message = 'Failed to start screen sharing. Please try again.'
+          setError(message)
+          onError?.(message)
+          return
+        }
         
         if (layout === 'pip') {
-          const cameraStream = await navigator.mediaDevices.getUserMedia({
+          try {
+            const cameraStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: selectedDeviceId },
+              audio: true
+            })
+            stream = new MediaStream([
+              ...stream.getVideoTracks(),
+              ...stream.getAudioTracks(),
+              ...cameraStream.getVideoTracks(),
+              ...cameraStream.getAudioTracks()
+            ])
+          } catch (err) {
+            console.error('Camera error:', err)
+            stream.getTracks().forEach(track => track.stop())
+            const message = 'Failed to access camera for picture-in-picture mode'
+            setError(message)
+            onError?.(message)
+            return
+          }
+        }
+      } else {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: selectedDeviceId },
             audio: true
           })
-          stream = new MediaStream([
-            ...stream.getVideoTracks(),
-            ...stream.getAudioTracks(),
-            ...cameraStream.getVideoTracks(),
-            ...cameraStream.getAudioTracks()
-          ])
+        } catch (err) {
+          console.error('Camera error:', err)
+          const message = 'Failed to access camera. Please check your permissions.'
+          setError(message)
+          onError?.(message)
+          return
         }
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: selectedDeviceId }
-        })
       }
 
       streamRef.current = stream
@@ -95,7 +149,9 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
         videoRef.current.srcObject = stream
       }
 
-      const mediaRecorder = new MediaRecorder(stream)
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp8,opus'
+      })
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
@@ -110,31 +166,56 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
         onRecordingComplete(blob)
       }
 
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event)
+        const message = 'An error occurred while recording'
+        setError(message)
+        onError?.(message)
+        stopRecording()
+      }
+
       mediaRecorder.start()
       setIsRecording(true)
       setRecordingTime(0)
     } catch (error) {
       console.error('Error starting recording:', error)
+      const message = 'Failed to start recording. Please try again.'
+      setError(message)
+      onError?.(message)
     }
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
-      stopStream()
-      setIsRecording(false)
-      setIsPaused(false)
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+        stopStream()
+        setIsRecording(false)
+        setIsPaused(false)
+      }
+    } catch (error) {
+      console.error('Error stopping recording:', error)
+      const message = 'Failed to stop recording properly'
+      setError(message)
+      onError?.(message)
     }
   }
 
   const togglePause = () => {
-    if (mediaRecorderRef.current) {
-      if (isPaused) {
-        mediaRecorderRef.current.resume()
-      } else {
-        mediaRecorderRef.current.pause()
+    try {
+      if (mediaRecorderRef.current) {
+        if (isPaused) {
+          mediaRecorderRef.current.resume()
+        } else {
+          mediaRecorderRef.current.pause()
+        }
+        setIsPaused(!isPaused)
       }
-      setIsPaused(!isPaused)
+    } catch (error) {
+      console.error('Error toggling pause:', error)
+      const message = 'Failed to pause/resume recording'
+      setError(message)
+      onError?.(message)
     }
   }
 
@@ -191,8 +272,32 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel }: Video
     return () => clearInterval(timerRef.current)
   }, [isRecording, isPaused])
 
+  if (!hasPermissions) {
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          {error || 'Camera access is required'}
+        </Alert>
+        <div className="flex justify-between">
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button onClick={checkPermissions}>
+            Request Permissions
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          {error}
+        </Alert>
+      )}
+
       <div className="relative aspect-video rounded-lg bg-gray-900 overflow-hidden">
         <video
           ref={videoRef}

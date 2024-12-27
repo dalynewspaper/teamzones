@@ -13,9 +13,8 @@ import { VideoRecordingInterface } from '@/components/video/VideoRecordingInterf
 import VideoPageClient from '@/components/video/VideoPageClient'
 import { storage, db } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore'
+import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, getDoc } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
-import { transcribeVideo } from '@/lib/transcription'
 
 const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23f1f5f9"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="14" fill="%2394a3b8" text-anchor="middle" dy=".3em"%3EVideo Thumbnail%3C/text%3E%3C/svg%3E'
 
@@ -44,6 +43,35 @@ export function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [updates, setUpdates] = useState<Update[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [organizationName, setOrganizationName] = useState<string>('')
+
+  // Load organization name when component mounts
+  useEffect(() => {
+    const loadOrganization = async () => {
+      if (!user?.uid) return
+
+      try {
+        const userRef = doc(db, 'users', user.uid)
+        const userSnap = await getDoc(userRef)
+        
+        if (userSnap.exists()) {
+          const userData = userSnap.data()
+          if (userData.organizationId) {
+            const orgRef = doc(db, 'organizations', userData.organizationId)
+            const orgSnap = await getDoc(orgRef)
+            if (orgSnap.exists()) {
+              setOrganizationName(orgSnap.data().name)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading organization:', error)
+      }
+    }
+
+    loadOrganization()
+  }, [user?.uid])
 
   // Load videos from Firebase when component mounts
   useEffect(() => {
@@ -52,6 +80,11 @@ export function Dashboard() {
 
       try {
         setIsLoading(true)
+        setError(null) // Add error state if not already present
+
+        // Wait a bit to ensure Firestore is initialized
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
         const videosQuery = query(
           collection(db, 'videos'),
           where('userId', '==', user.uid),
@@ -65,27 +98,30 @@ export function Dashboard() {
           const data = doc.data()
           videos.push({
             id: doc.id,
-            title: data.title,
-            timestamp: new Date(data.timestamp?.toDate()).toLocaleString(),
-            duration: data.duration,
-            views: data.views,
-            thumbnail: data.thumbnail,
-            url: data.url,
-            isStarred: data.isStarred,
+            title: data.title || 'Untitled Video',
+            timestamp: data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : new Date().toLocaleString(),
+            duration: data.duration || '0:00',
+            views: data.views || 0,
+            thumbnail: data.thumbnail || placeholderImage,
+            url: data.url || '',
+            isStarred: data.isStarred || false,
             userId: data.userId,
-            createdAt: data.createdAt,
+            createdAt: data.createdAt || new Date().toISOString(),
           })
         })
 
         setUpdates(videos)
       } catch (error) {
         console.error('Error loading videos:', error)
+        setError('Failed to load videos. Please try again.') // Add error state if not already present
       } finally {
         setIsLoading(false)
       }
     }
 
-    loadVideos()
+    if (user) {
+      loadVideos()
+    }
   }, [user])
 
   const handleSignOut = async () => {
@@ -227,7 +263,7 @@ export function Dashboard() {
         {/* Workspace Selector */}
         <div className="px-3 py-2 border-b border-gray-200">
           <Button variant="ghost" className="w-full justify-between text-sm font-medium">
-            TeamZones
+            {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </div>

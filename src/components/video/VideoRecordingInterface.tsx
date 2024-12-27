@@ -20,26 +20,50 @@ interface VideoRecordingInterfaceProps {
   onRecordingComplete: (blob: Blob) => void
   onCancel: () => void
   onError?: (message: string) => void
+  initialLayout?: 'camera' | 'screen' | 'pip'
+  initialQuality?: '720p' | '1080p'
 }
 
-export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError }: VideoRecordingInterfaceProps) {
+interface RecordingSettingsProps {
+  resolution: 'standard' | 'high' | 'ultra'
+  setResolution: (resolution: 'standard' | 'high' | 'ultra') => void
+  layout: 'camera' | 'screen' | 'pip'
+  setLayout: (layout: 'camera' | 'screen' | 'pip') => void
+  backgroundBlur: boolean
+  setBackgroundBlur: (backgroundBlur: boolean) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function VideoRecordingInterface({ 
+  onRecordingComplete, 
+  onCancel, 
+  onError,
+  initialLayout = 'camera',
+  initialQuality = '1080p'
+}: VideoRecordingInterfaceProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [devices, setDevices] = useState<VideoDevice[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [isScreenSharing, setIsScreenSharing] = useState(false)
-  const [layout, setLayout] = useState<'camera' | 'screen' | 'pip'>('camera')
-  const [resolution, setResolution] = useState<'720p' | '1080p'>('720p')
+  const [layout, setLayout] = useState<'camera' | 'screen' | 'pip'>(initialLayout)
+  const [quality, setQuality] = useState<'720p' | '1080p'>(initialQuality)
   const [backgroundBlur, setBackgroundBlur] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasPermissions, setHasPermissions] = useState(false)
+  const [audioSource, setAudioSource] = useState<'microphone' | 'system' | 'both'>('both')
+  const [isProcessing, setIsProcessing] = useState(false)
   
   const videoRef = useRef<HTMLVideoElement>(null)
+  const pipVideoRef = useRef<HTMLVideoElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const screenStreamRef = useRef<MediaStream | null>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
@@ -89,68 +113,102 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
     }
   }
 
+  const getVideoConstraints = () => {
+    const constraints: MediaTrackConstraints = {
+      deviceId: selectedDeviceId
+    }
+
+    switch (quality) {
+      case '1080p':
+        constraints.width = 1920
+        constraints.height = 1080
+        break
+      case '720p':
+        constraints.width = 1280
+        constraints.height = 720
+        break
+    }
+
+    return constraints
+  }
+
   const startRecording = async () => {
     try {
       setError(null)
-      let stream: MediaStream
+      setIsProcessing(true)
+      let finalStream: MediaStream | null = null
 
       if (isScreenSharing) {
         try {
-          stream = await navigator.mediaDevices.getDisplayMedia({ 
-            video: true,
-            audio: true
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: {
+              displaySurface: 'monitor'
+            },
+            audio: audioSource === 'system' || audioSource === 'both'
           })
+          screenStreamRef.current = screenStream
+
+          if (layout === 'pip') {
+            const cameraStream = await navigator.mediaDevices.getUserMedia({
+              video: getVideoConstraints(),
+              audio: audioSource === 'microphone' || audioSource === 'both'
+            })
+            cameraStreamRef.current = cameraStream
+
+            // Combine streams for PiP
+            finalStream = new MediaStream([
+              ...screenStream.getVideoTracks(),
+              ...cameraStream.getVideoTracks(),
+              ...(audioSource === 'both' ? [...screenStream.getAudioTracks(), ...cameraStream.getAudioTracks()] :
+                  audioSource === 'system' ? screenStream.getAudioTracks() :
+                  cameraStream.getAudioTracks())
+            ])
+          } else {
+            finalStream = screenStream
+          }
         } catch (err) {
           console.error('Screen sharing error:', err)
           const message = 'Failed to start screen sharing. Please try again.'
           setError(message)
           onError?.(message)
+          setIsProcessing(false)
           return
-        }
-        
-        if (layout === 'pip') {
-          try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({
-              video: { deviceId: selectedDeviceId },
-              audio: true
-            })
-            stream = new MediaStream([
-              ...stream.getVideoTracks(),
-              ...stream.getAudioTracks(),
-              ...cameraStream.getVideoTracks(),
-              ...cameraStream.getAudioTracks()
-            ])
-          } catch (err) {
-            console.error('Camera error:', err)
-            stream.getTracks().forEach(track => track.stop())
-            const message = 'Failed to access camera for picture-in-picture mode'
-            setError(message)
-            onError?.(message)
-            return
-          }
         }
       } else {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: selectedDeviceId },
+          const cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: getVideoConstraints(),
             audio: true
           })
+          cameraStreamRef.current = cameraStream
+          finalStream = cameraStream
         } catch (err) {
           console.error('Camera error:', err)
           const message = 'Failed to access camera. Please check your permissions.'
           setError(message)
           onError?.(message)
+          setIsProcessing(false)
           return
         }
       }
 
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
+      if (!finalStream) {
+        throw new Error('Failed to create media stream')
       }
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus'
+      streamRef.current = finalStream
+      if (videoRef.current) {
+        videoRef.current.srcObject = finalStream
+      }
+
+      // Set up PiP video if needed
+      if (layout === 'pip' && pipVideoRef.current && cameraStreamRef.current) {
+        pipVideoRef.current.srcObject = cameraStreamRef.current
+      }
+
+      const mediaRecorder = new MediaRecorder(finalStream, {
+        mimeType: 'video/webm;codecs=vp8,opus',
+        videoBitsPerSecond: quality === '1080p' ? 4000000 : 2500000
       })
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
@@ -164,6 +222,7 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' })
         onRecordingComplete(blob)
+        setIsProcessing(false)
       }
 
       mediaRecorder.onerror = (event) => {
@@ -172,16 +231,19 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
         setError(message)
         onError?.(message)
         stopRecording()
+        setIsProcessing(false)
       }
 
       mediaRecorder.start()
       setIsRecording(true)
       setRecordingTime(0)
+      setIsProcessing(false)
     } catch (error) {
       console.error('Error starting recording:', error)
       const message = 'Failed to start recording. Please try again.'
       setError(message)
       onError?.(message)
+      setIsProcessing(false)
     }
   }
 
@@ -220,12 +282,23 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
   }
 
   const stopStream = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop())
+      screenStreamRef.current = null
+    }
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(track => track.stop())
+      cameraStreamRef.current = null
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null
+    }
+    if (pipVideoRef.current) {
+      pipVideoRef.current.srcObject = null
     }
   }
 
@@ -234,11 +307,6 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
       setIsScreenSharing(!isScreenSharing)
     }
   }
-
-  const getVideoConstraints = () => ({
-    width: resolution === '1080p' ? 1920 : 1280,
-    height: resolution === '1080p' ? 1080 : 720
-  })
 
   const toggleBackgroundBlur = () => {
     setBackgroundBlur(!backgroundBlur)
@@ -291,54 +359,54 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col">
       {error && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive" className="mb-4 flex-none">
           {error}
         </Alert>
       )}
 
-      <div className="relative aspect-video rounded-lg bg-gray-900 overflow-hidden">
+      <div className="flex-1 relative rounded-xl bg-gray-900 overflow-hidden shadow-lg">
         <video
           ref={videoRef}
           autoPlay
           muted
           playsInline
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
         />
         
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/50 to-transparent">
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70 to-transparent">
           <div className="flex items-center justify-between text-white">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {isRecording ? (
                 <>
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span>{formatTime(recordingTime)}</span>
+                  <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-lg font-medium">{formatTime(recordingTime)}</span>
                 </>
               ) : (
-                <span>Ready to record</span>
+                <span className="text-lg">Ready to record</span>
               )}
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {!isRecording && (
                 <>
                   <Button
-                    size="sm"
+                    size="lg"
                     variant="ghost"
                     onClick={toggleScreenShare}
                     className="text-white hover:text-white hover:bg-white/20"
                   >
-                    {isScreenSharing ? <Monitor /> : <Video />}
+                    {isScreenSharing ? <Monitor className="w-5 h-5" /> : <Video className="w-5 h-5" />}
                   </Button>
                   
                   <Button
-                    size="sm"
+                    size="lg"
                     variant="ghost"
                     onClick={() => setIsSettingsOpen(true)}
                     className="text-white hover:text-white hover:bg-white/20"
                   >
-                    <Settings2 className="w-4 h-4" />
+                    <Settings2 className="w-5 h-5" />
                   </Button>
 
                   <KeyboardShortcutsLegend />
@@ -349,33 +417,36 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
         </div>
       </div>
 
-      <div className="flex justify-between">
-        <Button variant="ghost" onClick={onCancel}>
+      <div className="flex justify-between items-center pt-4 flex-none">
+        <Button size="lg" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
         
-        <div className="space-x-2">
+        <div className="space-x-3">
           {isRecording ? (
             <>
               <Button
+                size="lg"
                 variant="ghost"
                 onClick={togglePause}
+                className="min-w-[140px]"
               >
-                {isPaused ? <Play className="mr-2" /> : <Pause className="mr-2" />}
+                {isPaused ? <Play className="mr-2 w-5 h-5" /> : <Pause className="mr-2 w-5 h-5" />}
                 {isPaused ? 'Resume' : 'Pause'}
               </Button>
               
               <Button
+                size="lg"
                 variant="ghost"
                 onClick={stopRecording}
-                className="text-red-600 hover:text-red-700"
+                className="text-red-600 hover:text-red-700 min-w-[140px]"
               >
-                <StopCircle className="mr-2" />
+                <StopCircle className="mr-2 w-5 h-5" />
                 Stop Recording
               </Button>
             </>
           ) : (
-            <Button onClick={startRecording}>
+            <Button size="lg" onClick={startRecording} className="min-w-[140px]">
               Start Recording
             </Button>
           )}
@@ -383,8 +454,8 @@ export function VideoRecordingInterface({ onRecordingComplete, onCancel, onError
       </div>
 
       <RecordingSettings
-        resolution={resolution}
-        setResolution={setResolution}
+        resolution={quality}
+        setResolution={setQuality}
         layout={layout}
         setLayout={setLayout}
         backgroundBlur={backgroundBlur}

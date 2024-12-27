@@ -1,12 +1,11 @@
 'use client'
-import { Inter } from 'next/font/google'
+
+import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
 import { WeekProvider } from '@/contexts/WeekContext'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
+import { ToastProvider } from '@/components/ui/toast'
 
 export default function RootLayout({
   children,
@@ -15,12 +14,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <AuthProvider>
           <WeekProvider>
             <OnboardingProvider>
-              {children}
-              <OnboardingModal />
+              <ToastProvider>
+                {children}
+                <OnboardingModal />
+              </ToastProvider>
             </OnboardingProvider>
           </WeekProvider>
         </AuthProvider>

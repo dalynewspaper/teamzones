@@ -144,14 +144,14 @@ export function VideoRecordingInterface({
             video: {
               displaySurface: 'monitor'
             },
-            audio: audioSource === 'system' || audioSource === 'both'
+            audio: true
           })
           screenStreamRef.current = screenStream
 
           if (layout === 'pip') {
             const cameraStream = await navigator.mediaDevices.getUserMedia({
               video: getVideoConstraints(),
-              audio: audioSource === 'microphone' || audioSource === 'both'
+              audio: true
             })
             cameraStreamRef.current = cameraStream
 
@@ -159,9 +159,8 @@ export function VideoRecordingInterface({
             finalStream = new MediaStream([
               ...screenStream.getVideoTracks(),
               ...cameraStream.getVideoTracks(),
-              ...(audioSource === 'both' ? [...screenStream.getAudioTracks(), ...cameraStream.getAudioTracks()] :
-                  audioSource === 'system' ? screenStream.getAudioTracks() :
-                  cameraStream.getAudioTracks())
+              ...screenStream.getAudioTracks(),
+              ...cameraStream.getAudioTracks()
             ])
           } else {
             finalStream = screenStream
@@ -178,13 +177,17 @@ export function VideoRecordingInterface({
         try {
           const cameraStream = await navigator.mediaDevices.getUserMedia({
             video: getVideoConstraints(),
-            audio: true
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
           })
           cameraStreamRef.current = cameraStream
           finalStream = cameraStream
         } catch (err) {
           console.error('Camera error:', err)
-          const message = 'Failed to access camera. Please check your permissions.'
+          const message = 'Failed to access camera or microphone. Please check your permissions.'
           setError(message)
           onError?.(message)
           setIsProcessing(false)

@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Share2, Copy, Clock, Calendar, Eye, MessageSquare, ArrowLeft, MoreVertical } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from "@/components/ui/use-toast"
 
 interface VideoDetails {
   id: string
@@ -21,6 +23,7 @@ interface VideoDetails {
   createdAt: string
   userId: string
   transcription?: string
+  isTranscribing?: boolean
 }
 
 interface VideoPageClientProps {
@@ -31,8 +34,77 @@ export default function VideoPageClient({ videoId }: VideoPageClientProps) {
   const [video, setVideo] = useState<VideoDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('transcript')
+  const [isTranscribing, setIsTranscribing] = useState(false)
   const router = useRouter()
+  const { user } = useAuth()
+  const { toast } = useToast()
+
+  // Function to handle transcription
+  const handleTranscribe = async (videoToTranscribe: VideoDetails) => {
+    if (!videoToTranscribe || isTranscribing) return
+    
+    setIsTranscribing(true)
+    
+    try {
+      // Update transcribing state in Firestore
+      await updateDoc(doc(db, 'videos', videoToTranscribe.id), {
+        isTranscribing: true
+      })
+
+      console.log('Starting transcription for video:', {
+        url: videoToTranscribe.url,
+        id: videoToTranscribe.id,
+        title: videoToTranscribe.title
+      })
+      
+      // Call the transcription API
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoUrl: videoToTranscribe.url,
+        }),
+      })
+
+      console.log('Transcription API response status:', response.status)
+      
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('Transcription API error:', errorData)
+        throw new Error(errorData || 'Failed to transcribe video')
+      }
+
+      const data = await response.json()
+      console.log('Transcription completed:', data)
+      
+      const transcription = data.transcription
+
+      // Update video document with transcription
+      await updateDoc(doc(db, 'videos', videoToTranscribe.id), {
+        transcription,
+        isTranscribing: false
+      })
+
+      // Update local state
+      setVideo(prev => prev ? { ...prev, transcription, isTranscribing: false } : null)
+    } catch (error) {
+      console.error('Error generating transcription:', error)
+      // Reset transcribing state in Firestore
+      await updateDoc(doc(db, 'videos', videoToTranscribe.id), {
+        isTranscribing: false
+      })
+      // Show error to user
+      toast({
+        title: "Transcription Failed",
+        description: error instanceof Error ? error.message : "Failed to transcribe video",
+        variant: "destructive"
+      })
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -51,17 +123,23 @@ export default function VideoPageClient({ videoId }: VideoPageClientProps) {
         }
 
         const data = videoDoc.data()
-        // Validate required fields
         if (!data.url || !data.title) {
           setError('Invalid video data')
           setIsLoading(false)
           return
         }
 
-        setVideo({
+        const videoData = {
           ...data as VideoDetails,
           id: videoDoc.id,
-        })
+        }
+
+        setVideo(videoData)
+
+        // Automatically start transcription if no transcription exists
+        if (!videoData.transcription && !videoData.isTranscribing) {
+          handleTranscribe(videoData)
+        }
       } catch (error) {
         console.error('Error fetching video:', error)
         setError('Failed to load video')
@@ -71,7 +149,7 @@ export default function VideoPageClient({ videoId }: VideoPageClientProps) {
     }
 
     fetchVideo()
-  }, [videoId, router])
+  }, [videoId])
 
   if (isLoading) {
     return (
@@ -189,7 +267,7 @@ export default function VideoPageClient({ videoId }: VideoPageClientProps) {
                 </TabsList>
                 <TabsContent value="transcript" className="flex-1 mt-4">
                   <div className="bg-gray-50 rounded-lg p-4 h-full">
-                    <div className="flex items-center mb-4">
+                    <div className="flex items-center justify-between mb-4">
                       <Input
                         type="search"
                         placeholder="Search transcript..."
@@ -197,7 +275,12 @@ export default function VideoPageClient({ videoId }: VideoPageClientProps) {
                       />
                     </div>
                     <div className="space-y-4 overflow-auto h-[calc(100vh-400px)]">
-                      {video.transcription ? (
+                      {isTranscribing ? (
+                        <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#4263EB]"></div>
+                          <p className="text-sm text-gray-500">Generating transcript...</p>
+                        </div>
+                      ) : video?.transcription ? (
                         <div className="space-y-2">
                           <p className="text-sm text-gray-600">
                             {video.transcription}

@@ -1,12 +1,19 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # dependencies
-node_modules/
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
 
 # next.js
-.next/
-out/
+/.next/
+/out/
 
 # production
-build/
+/build
 
 # misc
 .DS_Store
@@ -27,6 +34,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# firebase
-.firebase/
-firebase-debug.log
+# Google Cloud credentials
+google-credentials.json

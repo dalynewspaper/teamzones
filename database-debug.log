@@ -1,4 +1,4 @@
-22:24:23.047 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
-22:24:23.112 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
-22:24:27.819 [Thread-0] INFO com.firebase.server.forge.App$ - Attempting graceful shutdown.
-22:24:27.820 [Thread-0] INFO com.firebase.server.forge.App$ - Graceful shutdown complete.
+14:31:30.227 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+14:31:30.301 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
+14:31:38.296 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO com.firebase.core.namespace.NamespaceActor - teamzones-83c56-default-rtdb successfully activated FBKV (SurveyIdle(0)) wait: 60ms, init: 0ms
+14:31:38.331 [NamespaceSystem-blocking-namespace-operation-dispatcher-6] INFO com.firebase.core.namespace.StateManager - Namespace teamzones-83c56-default-rtdb status Active to Active

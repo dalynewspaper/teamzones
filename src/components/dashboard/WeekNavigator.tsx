@@ -1,57 +1,55 @@
 'use client'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useWeek } from '@/contexts/WeekContext'
+import { format } from 'date-fns'
+import { Button } from '@/components/ui/button'
 
 export function WeekNavigator() {
-  const { weekId, setWeekId, weekNumber, weekYear, weekStart, weekEnd } = useWeek()
+  const { currentWeek, navigateWeek } = useWeek()
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const date = new Date(direction === 'next' ? weekEnd : weekStart)
-    date.setDate(date.getDate() + (direction === 'next' ? 1 : -1))
-    setWeekId(`${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`)
-  }
+  if (!currentWeek) return null
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: 'numeric'
-    })
+    return format(date, 'MMM d, yyyy')
   }
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <button
+          <Button
             onClick={() => navigateWeek('prev')}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            variant="ghost"
+            size="sm"
+            className="hover:bg-gray-100 rounded-full p-2 h-auto"
           >
             <ChevronLeftIcon className="h-5 w-5" />
-          </button>
+          </Button>
           <div>
             <h2 className="text-lg font-semibold">
-              Week {weekNumber}, {weekYear}
+              CW {currentWeek.weekNumber}, {currentWeek.year}
             </h2>
             <p className="text-sm text-gray-500">
-              {formatDate(weekStart)} - {formatDate(weekEnd)}
+              {formatDate(currentWeek.startDate)} - {formatDate(currentWeek.endDate)}
             </p>
           </div>
-          <button
+          <Button
             onClick={() => navigateWeek('next')}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            variant="ghost"
+            size="sm"
+            className="hover:bg-gray-100 rounded-full p-2 h-auto"
           >
             <ChevronRightIcon className="h-5 w-5" />
-          </button>
+          </Button>
         </div>
         
         <div className="flex items-center space-x-2">
-          <button className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">
+          <Button variant="outline" size="sm">
             Weekly Report
-          </button>
-          <button className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+          </Button>
+          <Button size="sm" className="bg-notion-blue hover:bg-notion-blue-dark text-white">
             Set Weekly Goals
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,12 +1,19 @@
 'use client'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { auth } from '@/lib/firebase'
-import { signInWithPopup, GoogleAuthProvider, User, signOut as firebaseSignOut } from 'firebase/auth'
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  OAuthProvider,
+  User, 
+  signOut as firebaseSignOut 
+} from 'firebase/auth'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   authenticateWithGoogle: () => Promise<User | null>
+  authenticateWithMicrosoft: () => Promise<User | null>
   signOut: () => Promise<void>
 }
 
@@ -31,6 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return result.user
   }
 
+  const authenticateWithMicrosoft = async () => {
+    const provider = new OAuthProvider('microsoft.com')
+    const result = await signInWithPopup(auth, provider)
+    return result.user
+  }
+
   const signOut = async () => {
     await firebaseSignOut(auth)
   }
@@ -40,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, 
       loading, 
       authenticateWithGoogle,
+      authenticateWithMicrosoft,
       signOut
     }}>
       {children}

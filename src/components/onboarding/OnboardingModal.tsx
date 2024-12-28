@@ -11,22 +11,19 @@ const STEPS = [
     id: 'user-info',
     title: 'Welcome to Open Async',
     subtitle: "Let's personalize your experience",
-    icon: '👋',
-    color: 'from-blue-500/20 to-purple-500/20'
+    icon: '👋'
   },
   { 
     id: 'organization',
     title: 'Set Up Your Workspace',
     subtitle: 'Create a home for your team',
-    icon: '🏢',
-    color: 'from-purple-500/20 to-pink-500/20'
+    icon: '🏢'
   },
   { 
     id: 'first-update',
     title: 'Share Your First Update',
     subtitle: 'Connect with your team async-style',
-    icon: '🎥',
-    color: 'from-pink-500/20 to-orange-500/20'
+    icon: '🎥'
   }
 ]
 
@@ -43,19 +40,12 @@ export function OnboardingModal() {
   return (
     <Dialog open={true}>
       <DialogContent 
-        className="max-w-[1200px] min-h-[800px] p-0 overflow-hidden bg-white/95 backdrop-blur-xl shadow-2xl"
+        className="max-w-[1200px] min-h-[800px] p-0 overflow-hidden bg-white shadow-2xl"
         aria-describedby="onboarding-description"
       >
         <DialogTitle className="sr-only">
           {currentStepInfo.title}
         </DialogTitle>
-
-        {/* Background Gradient */}
-        <motion.div
-          className={`absolute inset-0 bg-gradient-to-br ${currentStepInfo.color} opacity-40`}
-          animate={{ opacity: [0, 1] }}
-          transition={{ duration: 0.8 }}
-        />
 
         {/* Progress Bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-black/5">

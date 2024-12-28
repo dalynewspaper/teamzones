@@ -1,8 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
 
 interface GoogleButtonProps {
   onClick: () => void;
@@ -12,41 +10,39 @@ interface GoogleButtonProps {
 
 export function GoogleButton({ onClick, loading, className }: GoogleButtonProps) {
   return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className="relative group"
+    <button
+      onClick={onClick}
+      disabled={loading}
+      type="button"
+      className={`
+        w-full h-[40px] 
+        bg-white hover:bg-gray-50
+        text-gray-900
+        px-3
+        rounded
+        flex items-center
+        transition-colors
+        disabled:opacity-70
+        border border-gray-300
+        ${className}
+      `}
     >
-      <div className="absolute -inset-0.5 bg-gradient-to-r from-[#4285F4] to-[#34A853] rounded-lg opacity-0 group-hover:opacity-10 transition duration-500 blur" />
-      <Button
-        onClick={onClick}
-        disabled={loading}
-        variant="outline"
-        className={`
-          relative w-full bg-white hover:bg-gray-50 text-gray-700 font-medium 
-          border border-gray-200 shadow-sm hover:shadow-md
-          transition-all duration-200
-          ${className}
-        `}
-      >
-        <div className="flex items-center justify-center gap-3 w-full">
-          <div className="relative flex-shrink-0">
-            <Image
-              src="/google.svg"
-              alt="Google"
-              width={24}
-              height={24}
-              className="w-6 h-6 transition-transform group-hover:scale-110"
-            />
-          </div>
-          <span className="text-sm">Continue with Google</span>
-          {loading && (
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-gray-200 border-t-[#4285F4] rounded-full animate-spin" />
-            </div>
-          )}
+      <div className="p-2">
+        <Image
+          src="/google.svg"
+          alt="Google"
+          width={18}
+          height={18}
+        />
+      </div>
+      <span className="flex-1 text-center text-[14px] font-medium pr-3">
+        Sign in with Google
+      </span>
+      {loading && (
+        <div className="mr-2">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
-      </Button>
-    </motion.div>
+      )}
+    </button>
   );
 } 

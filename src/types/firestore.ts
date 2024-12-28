@@ -40,14 +40,19 @@ export interface UserProfile {
   }
 }
 
-export interface Video extends BaseDocument {
-  title: string
-  url: string
-  thumbnailUrl: string
-  weekId: string
-  userId: string
-  status: 'processing' | 'ready' | 'failed'
-  duration?: number
+export interface Video {
+  id: string;
+  userId: string;
+  weekId: string;
+  title: string;
+  url: string;
+  thumbnail?: string;
+  duration: number;
+  timestamp: Date;
+  views: number;
+  isStarred: boolean;
+  createdAt: string;
+  transcription?: string;
 }
 
 export interface Organization {

@@ -1,30 +1,35 @@
 'use client'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
-import { startOfWeek, endOfWeek, format } from 'date-fns'
+import { startOfWeek, endOfWeek, format, addWeeks, subWeeks, getISOWeek } from 'date-fns'
 
 interface Week {
   id: string
   startDate: Date
   endDate: Date
+  weekNumber: number
+  year: number
 }
 
 interface WeekContextType {
   currentWeek: Week | null
+  navigateWeek: (direction: 'prev' | 'next') => void
+  setWeekByDate: (date: Date) => void
   refreshWeek: () => void
 }
 
 const WeekContext = createContext<WeekContextType | undefined>(undefined)
 
-function getCurrentWeek(): Week {
-  const now = new Date()
-  const start = startOfWeek(now, { weekStartsOn: 1 }) // Start week on Monday
-  const end = endOfWeek(now, { weekStartsOn: 1 })
+function getWeekInfo(date: Date): Week {
+  const start = startOfWeek(date, { weekStartsOn: 1 }) // Start week on Monday
+  const end = endOfWeek(date, { weekStartsOn: 1 })
   
   return {
-    id: format(start, 'yyyy-MM-dd'),
+    id: format(start, 'yyyy-\'W\'ww'),
     startDate: start,
-    endDate: end
+    endDate: end,
+    weekNumber: getISOWeek(date),
+    year: date.getFullYear()
   }
 }
 
@@ -32,9 +37,23 @@ export function WeekProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [currentWeek, setCurrentWeek] = useState<Week | null>(null)
 
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    if (!currentWeek) return
+    
+    const newDate = direction === 'next' 
+      ? addWeeks(currentWeek.startDate, 1)
+      : subWeeks(currentWeek.startDate, 1)
+    
+    setCurrentWeek(getWeekInfo(newDate))
+  }
+
+  const setWeekByDate = (date: Date) => {
+    setCurrentWeek(getWeekInfo(date))
+  }
+
   const refreshWeek = () => {
     if (user) {
-      setCurrentWeek(getCurrentWeek())
+      setCurrentWeek(getWeekInfo(new Date()))
     }
   }
 
@@ -43,7 +62,7 @@ export function WeekProvider({ children }: { children: React.ReactNode }) {
   }, [user])
 
   return (
-    <WeekContext.Provider value={{ currentWeek, refreshWeek }}>
+    <WeekContext.Provider value={{ currentWeek, navigateWeek, setWeekByDate, refreshWeek }}>
       {children}
     </WeekContext.Provider>
   )

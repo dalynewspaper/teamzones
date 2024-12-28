@@ -7,27 +7,45 @@ export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'updatedA
   const teamRef = doc(teamsRef)
   const now = new Date().toISOString()
   
-  // Ensure members array is properly structured
-  const members = data.members.map(member => ({
-    userId: member.userId,
-    role: member.role,
-    joinedAt: member.joinedAt || now
-  }))
-  
-  const team: Team = {
-    id: teamRef.id,
-    name: data.name,
-    description: data.description,
-    organizationId: data.organizationId,
-    ownerId: data.ownerId,
-    members,
-    isDefault: false,
-    createdAt: now,
-    updatedAt: now
-  }
+  try {
+    // First ensure General team exists and user is a member
+    const generalTeam = await getGeneralTeam(data.organizationId)
+    if (generalTeam && !generalTeam.members.some(m => m.userId === data.ownerId)) {
+      // Add user to General team if they're not already a member
+      await updateDoc(doc(teamsRef, generalTeam.id), {
+        members: [...generalTeam.members, {
+          userId: data.ownerId,
+          role: 'member',
+          joinedAt: now
+        }]
+      })
+    }
+    
+    // Ensure members array is properly structured
+    const members = data.members.map(member => ({
+      userId: member.userId,
+      role: member.role,
+      joinedAt: member.joinedAt || now
+    }))
+    
+    const team: Team = {
+      id: teamRef.id,
+      name: data.name,
+      description: data.description,
+      organizationId: data.organizationId,
+      ownerId: data.ownerId,
+      members,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now
+    }
 
-  await setDoc(teamRef, team)
-  return team
+    await setDoc(teamRef, team)
+    return team
+  } catch (error) {
+    console.error('Error creating team:', error)
+    throw error
+  }
 }
 
 export async function createGeneralTeam(organizationId: string, ownerId: string): Promise<Team> {
@@ -73,6 +91,28 @@ export async function getGeneralTeam(organizationId: string): Promise<Team | nul
     return null
   }
   
+  // If multiple General teams exist, keep the oldest one and delete the others
+  if (snapshot.docs.length > 1) {
+    // Sort by creation date to find the oldest
+    const sortedDocs = snapshot.docs.sort((a, b) => {
+      const aDate = new Date(a.data().createdAt)
+      const bDate = new Date(b.data().createdAt)
+      return aDate.getTime() - bDate.getTime()
+    })
+
+    // Keep the oldest one
+    const oldestDoc = sortedDocs[0]
+    
+    // Delete the duplicates
+    for (let i = 1; i < sortedDocs.length; i++) {
+      const duplicateRef = doc(teamsRef, sortedDocs[i].id)
+      await deleteDoc(duplicateRef)
+    }
+
+    return { id: oldestDoc.id, ...oldestDoc.data() } as Team
+  }
+  
+  // Return the single General team
   const docSnapshot = snapshot.docs[0]
   const data = docSnapshot.data()
   return { id: docSnapshot.id, ...data } as Team
@@ -81,26 +121,34 @@ export async function getGeneralTeam(organizationId: string): Promise<Team | nul
 export async function getUserTeams(userId: string, organizationId: string): Promise<Team[]> {
   if (!organizationId) return []
   
-  const teamsRef = collection(db, `organizations/${organizationId}/teams`)
-  // First get all teams in the organization
-  const snapshot = await getDocs(teamsRef)
-  const teams = snapshot.docs.map(docSnapshot => ({ 
-    id: docSnapshot.id, 
-    ...docSnapshot.data() 
-  })) as Team[]
-  
-  // Filter teams where user is a member or the team is default
-  const userTeams = teams.filter(team => 
-    team.isDefault || 
-    team.members.some(member => member.userId === userId)
-  )
-  
-  // Sort teams so General appears first
-  return userTeams.sort((a, b) => {
-    if (a.isDefault) return -1
-    if (b.isDefault) return 1
-    return 0
-  })
+  try {
+    // First ensure General team exists
+    await getGeneralTeam(organizationId)
+    
+    const teamsRef = collection(db, `organizations/${organizationId}/teams`)
+    // Get all teams in the organization
+    const snapshot = await getDocs(teamsRef)
+    const teams = snapshot.docs.map(docSnapshot => ({ 
+      id: docSnapshot.id, 
+      ...docSnapshot.data() 
+    })) as Team[]
+    
+    // Filter teams where user is a member or the team is default
+    const userTeams = teams.filter(team => 
+      team.isDefault || 
+      team.members.some(member => member.userId === userId)
+    )
+    
+    // Sort teams so General appears first
+    return userTeams.sort((a, b) => {
+      if (a.isDefault) return -1
+      if (b.isDefault) return 1
+      return 0
+    })
+  } catch (error) {
+    console.error('Error getting user teams:', error)
+    return []
+  }
 }
 
 export async function updateTeamMemberRole(

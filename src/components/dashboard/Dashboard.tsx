@@ -19,6 +19,8 @@ import { WeekNavigator } from './WeekNavigator'
 import { useWeek } from '@/contexts/WeekContext'
 import { getUserTeams } from '@/services/teamService'
 import { Team } from '@/types/firestore'
+import { EmptyState } from './EmptyState'
+import { NewTeamModal } from './NewTeamModal'
 
 const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23f1f5f9"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="14" fill="%2394a3b8" text-anchor="middle" dy=".3em"%3EVideo Thumbnail%3C/text%3E%3C/svg%3E'
 
@@ -57,6 +59,7 @@ export function Dashboard({ children }: DashboardProps) {
   const [organizationName, setOrganizationName] = useState<string>('')
   const [teams, setTeams] = useState<Team[]>([])
   const [activeTeam, setActiveTeam] = useState<string | null>(null)
+  const [isNewTeamModalOpen, setIsNewTeamModalOpen] = useState(false)
 
   // Load organization name and teams when component mounts
   useEffect(() => {
@@ -269,6 +272,17 @@ export function Dashboard({ children }: DashboardProps) {
     // You could show a toast or error message here
   }
 
+  const handleTeamCreated = async () => {
+    if (!user?.organizationId) return
+    
+    try {
+      const userTeams = await getUserTeams(user.uid, user.organizationId)
+      setTeams(userTeams)
+    } catch (error) {
+      console.error('Error loading teams:', error)
+    }
+  }
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -312,11 +326,14 @@ export function Dashboard({ children }: DashboardProps) {
         <div className="p-3 border-t border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Teams</span>
-            <Link href="/dashboard/settings?tab=members">
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0"
+              onClick={() => setIsNewTeamModalOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
           <div className="space-y-1">
             {teams.map((team) => (
@@ -441,58 +458,64 @@ export function Dashboard({ children }: DashboardProps) {
                   ) : (
                     /* Updates Grid */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {updates.map((update) => (
-                        <div
-                          key={update.id}
-                          className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
-                          onClick={() => router.push(`/dashboard?video=${update.id}`)}
-                        >
-                          <div className="relative aspect-video">
-                            <Image
-                              src={update.thumbnail || placeholderImage}
-                              alt={update.title}
-                              fill
-                              className="rounded-t-lg object-cover"
-                              unoptimized={true}
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = placeholderImage;
-                              }}
-                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            />
-                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="bg-white/90 hover:bg-white"
-                                onClick={(e) => {
-                                  e.stopPropagation() // Prevent navigation when clicking the button
-                                  window.open(update.url, '_blank')
-                                }}
-                              >
-                                Watch Now
-                              </Button>
-                            </div>
-                            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                              {update.duration}
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex justify-between items-start">
-                              <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
-                                {update.title}
-                              </h3>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                              <span>{update.timestamp}</span>
-                              <span>{update.views} views</span>
-                            </div>
-                          </div>
+                      {updates.length === 0 ? (
+                        <div className="col-span-full">
+                          <EmptyState weekId={currentWeek?.id || ''} />
                         </div>
-                      ))}
+                      ) : (
+                        updates.map((update) => (
+                          <div
+                            key={update.id}
+                            className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
+                            onClick={() => router.push(`/dashboard?video=${update.id}`)}
+                          >
+                            <div className="relative aspect-video">
+                              <Image
+                                src={update.thumbnail || placeholderImage}
+                                alt={update.title}
+                                fill
+                                className="rounded-t-lg object-cover"
+                                unoptimized={true}
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = placeholderImage;
+                                }}
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="bg-white/90 hover:bg-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation() // Prevent navigation when clicking the button
+                                    window.open(update.url, '_blank')
+                                  }}
+                                >
+                                  Watch Now
+                                </Button>
+                              </div>
+                              <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                                {update.duration}
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              <div className="flex justify-between items-start">
+                                <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
+                                  {update.title}
+                                </h3>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                                <span>{update.timestamp}</span>
+                                <span>{update.views} views</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
                 </>
@@ -533,6 +556,13 @@ export function Dashboard({ children }: DashboardProps) {
           </div>
         </div>
       )}
+
+      {/* Add NewTeamModal */}
+      <NewTeamModal
+        isOpen={isNewTeamModalOpen}
+        onClose={() => setIsNewTeamModalOpen(false)}
+        onTeamCreated={handleTeamCreated}
+      />
     </div>
   )
 } 

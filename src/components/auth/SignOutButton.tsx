@@ -17,6 +17,11 @@ export function SignOutButton({ className }: SignOutButtonProps) {
     try {
       setLoading(true);
       await signOut();
+      // Clear any local storage or session data if needed
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
       router.push('/signin');
     } catch (error) {
       console.error('Sign out failed:', error);

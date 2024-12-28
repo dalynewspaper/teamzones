@@ -35,7 +35,19 @@ interface Update {
   weekId?: string;
 }
 
-export function Dashboard() {
+interface DashboardProps {
+  children?: React.ReactNode
+}
+
+interface Team {
+  id: string
+  name: string
+  description?: string
+  workspaceId: string
+  isDefault?: boolean
+}
+
+export function Dashboard({ children }: DashboardProps) {
   const { user, signOut } = useAuth()
   const { currentWeek } = useWeek()
   const router = useRouter()
@@ -49,33 +61,48 @@ export function Dashboard() {
   const [updates, setUpdates] = useState<Update[]>([])
   const [error, setError] = useState<string | null>(null)
   const [organizationName, setOrganizationName] = useState<string>('')
+  const [teams, setTeams] = useState<Team[]>([])
+  const [activeTeam, setActiveTeam] = useState<string | null>(null)
 
-  // Load organization name when component mounts
+  // Load organization name and teams when component mounts
   useEffect(() => {
-    const loadOrganization = async () => {
-      if (!user?.uid) return
+    const loadOrganizationAndTeams = async () => {
+      if (!user?.organizationId) return
 
       try {
-        const userRef = doc(db, 'users', user.uid)
-        const userSnap = await getDoc(userRef)
+        // Load organization
+        const orgRef = doc(db, 'organizations', user.organizationId)
+        const orgSnap = await getDoc(orgRef)
+        if (orgSnap.exists()) {
+          setOrganizationName(orgSnap.data().name)
+        }
+
+        // Load teams
+        const teamsRef = collection(db, 'teams')
+        const teamsQuery = query(teamsRef, where('workspaceId', '==', user.organizationId))
+        const teamsSnapshot = await getDocs(teamsQuery)
         
-        if (userSnap.exists()) {
-          const userData = userSnap.data()
-          if (userData.organizationId) {
-            const orgRef = doc(db, 'organizations', userData.organizationId)
-            const orgSnap = await getDoc(orgRef)
-            if (orgSnap.exists()) {
-              setOrganizationName(orgSnap.data().name)
-            }
-          }
+        const teamsData = teamsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Team[]
+
+        setTeams(teamsData)
+        
+        // Set active team to default team or first team
+        if (user.defaultTeam) {
+          setActiveTeam(user.defaultTeam)
+        } else if (teamsData.length > 0) {
+          const defaultTeam = teamsData.find(t => t.isDefault)
+          setActiveTeam(defaultTeam?.id || teamsData[0].id)
         }
       } catch (error) {
-        console.error('Error loading organization:', error)
+        console.error('Error loading organization and teams:', error)
       }
     }
 
-    loadOrganization()
-  }, [user?.uid])
+    loadOrganizationAndTeams()
+  }, [user?.organizationId, user?.defaultTeam])
 
   // Load videos from Firebase when component mounts or week changes
   useEffect(() => {
@@ -257,9 +284,9 @@ export function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex min-h-screen">
       {/* Sidebar */}
-      <div className="w-64 border-r border-gray-200 flex flex-col">
+      <div className="w-64 border-r bg-white flex flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-4 border-b border-gray-200">
           <Link href="/" className="text-xl font-semibold text-[#4263EB]">
@@ -270,7 +297,7 @@ export function Dashboard() {
         {/* Workspace Selector */}
         <div className="px-3 py-2 border-b border-gray-200">
           <Button variant="ghost" className="w-full justify-between text-sm font-medium">
-            {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
+            {organizationName || 'Loading...'}
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </div>
@@ -304,23 +331,30 @@ export function Dashboard() {
             </Button>
           </div>
           <div className="space-y-1">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Users className="h-4 w-4 mr-3" />
-              Engineering
-            </Button>
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Users className="h-4 w-4 mr-3" />
-              Design
-            </Button>
+            {teams.map((team) => (
+              <Button
+                key={team.id}
+                variant="ghost"
+                className={`w-full justify-start text-sm font-medium ${
+                  activeTeam === team.id ? 'bg-gray-100' : ''
+                }`}
+                onClick={() => setActiveTeam(team.id)}
+              >
+                <Users className="h-4 w-4 mr-3" />
+                {team.name}
+              </Button>
+            ))}
           </div>
         </div>
 
         {/* User Section */}
         <div className="p-3 border-t border-gray-200">
-          <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-            <Settings className="h-4 w-4 mr-3" />
-            Settings
-          </Button>
+          <Link href="/dashboard/settings">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Settings className="h-4 w-4 mr-3" />
+              Settings
+            </Button>
+          </Link>
           <Button 
             variant="ghost" 
             className="w-full justify-start text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -357,120 +391,122 @@ export function Dashboard() {
         </header>
 
         {/* Main Area */}
-        <div className="flex-1 overflow-auto bg-gray-50 py-12 px-6">
-          <div className="max-w-7xl mx-auto space-y-8">
-            <WeekNavigator />
+        {children || (
+          <div className="flex-1 overflow-auto bg-gray-50 py-12 px-6">
+            <div className="max-w-7xl mx-auto space-y-8">
+              <WeekNavigator />
 
-            {error ? (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <XCircle className="h-5 w-5 text-red-400" />
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">Error loading updates</h3>
-                    <div className="mt-2 text-sm text-red-700">
-                      <p>{error}</p>
+              {error ? (
+                <div className="rounded-md bg-red-50 p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <XCircle className="h-5 w-5 text-red-400" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Error loading updates</h3>
+                      <div className="mt-2 text-sm text-red-700">
+                        <p>{error}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <>
-                {/* Filters */}
-                <div className="flex space-x-2 mb-6">
-                  <Button
-                    variant={filter === 'all' ? 'default' : 'ghost'}
-                    onClick={() => setFilter('all')}
-                    className={filter === 'all' ? 'bg-[#4263EB]' : ''}
-                    size="sm"
-                  >
-                    All Updates
-                  </Button>
-                  <Button
-                    variant={filter === 'starred' ? 'default' : 'ghost'}
-                    onClick={() => setFilter('starred')}
-                    className={filter === 'starred' ? 'bg-[#4263EB]' : ''}
-                    size="sm"
-                  >
-                    <Star className="mr-2 h-3 w-3" /> Starred
-                  </Button>
-                  <Button
-                    variant={filter === 'inbox' ? 'default' : 'ghost'}
-                    onClick={() => setFilter('inbox')}
-                    className={filter === 'inbox' ? 'bg-[#4263EB]' : ''}
-                    size="sm"
-                  >
-                    <Inbox className="mr-2 h-3 w-3" /> Inbox
-                  </Button>
-                </div>
+              ) : (
+                <>
+                  {/* Filters */}
+                  <div className="flex space-x-2 mb-6">
+                    <Button
+                      variant={filter === 'all' ? 'default' : 'ghost'}
+                      onClick={() => setFilter('all')}
+                      className={filter === 'all' ? 'bg-[#4263EB]' : ''}
+                      size="sm"
+                    >
+                      All Updates
+                    </Button>
+                    <Button
+                      variant={filter === 'starred' ? 'default' : 'ghost'}
+                      onClick={() => setFilter('starred')}
+                      className={filter === 'starred' ? 'bg-[#4263EB]' : ''}
+                      size="sm"
+                    >
+                      <Star className="mr-2 h-3 w-3" /> Starred
+                    </Button>
+                    <Button
+                      variant={filter === 'inbox' ? 'default' : 'ghost'}
+                      onClick={() => setFilter('inbox')}
+                      className={filter === 'inbox' ? 'bg-[#4263EB]' : ''}
+                      size="sm"
+                    >
+                      <Inbox className="mr-2 h-3 w-3" /> Inbox
+                    </Button>
+                  </div>
 
-                {/* Loading State */}
-                {isLoading ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#4263EB]"></div>
-                  </div>
-                ) : (
-                  /* Updates Grid */
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {updates.map((update) => (
-                      <div
-                        key={update.id}
-                        className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
-                        onClick={() => router.push(`/dashboard?video=${update.id}`)}
-                      >
-                        <div className="relative aspect-video">
-                          <Image
-                            src={update.thumbnail || placeholderImage}
-                            alt={update.title}
-                            fill
-                            className="rounded-t-lg object-cover"
-                            unoptimized={true}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = placeholderImage;
-                            }}
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          />
-                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="bg-white/90 hover:bg-white"
-                              onClick={(e) => {
-                                e.stopPropagation() // Prevent navigation when clicking the button
-                                window.open(update.url, '_blank')
+                  {/* Loading State */}
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-64">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#4263EB]"></div>
+                    </div>
+                  ) : (
+                    /* Updates Grid */
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {updates.map((update) => (
+                        <div
+                          key={update.id}
+                          className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
+                          onClick={() => router.push(`/dashboard?video=${update.id}`)}
+                        >
+                          <div className="relative aspect-video">
+                            <Image
+                              src={update.thumbnail || placeholderImage}
+                              alt={update.title}
+                              fill
+                              className="rounded-t-lg object-cover"
+                              unoptimized={true}
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = placeholderImage;
                               }}
-                            >
-                              Watch Now
-                            </Button>
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="bg-white/90 hover:bg-white"
+                                onClick={(e) => {
+                                  e.stopPropagation() // Prevent navigation when clicking the button
+                                  window.open(update.url, '_blank')
+                                }}
+                              >
+                                Watch Now
+                              </Button>
+                            </div>
+                            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                              {update.duration}
+                            </div>
                           </div>
-                          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                            {update.duration}
+                          <div className="p-4">
+                            <div className="flex justify-between items-start">
+                              <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
+                                {update.title}
+                              </h3>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                              <span>{update.timestamp}</span>
+                              <span>{update.views} views</span>
+                            </div>
                           </div>
                         </div>
-                        <div className="p-4">
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
-                              {update.title}
-                            </h3>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                            <span>{update.timestamp}</span>
-                            <span>{update.views} views</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Recording Dialog */}

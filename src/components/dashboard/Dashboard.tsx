@@ -17,6 +17,8 @@ import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderB
 import { v4 as uuidv4 } from 'uuid'
 import { WeekNavigator } from './WeekNavigator'
 import { useWeek } from '@/contexts/WeekContext'
+import { getUserTeams } from '@/services/teamService'
+import { Team } from '@/types/firestore'
 
 const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23f1f5f9"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="14" fill="%2394a3b8" text-anchor="middle" dy=".3em"%3EVideo Thumbnail%3C/text%3E%3C/svg%3E'
 
@@ -37,14 +39,6 @@ interface Update {
 
 interface DashboardProps {
   children?: React.ReactNode
-}
-
-interface Team {
-  id: string
-  name: string
-  description?: string
-  workspaceId: string
-  isDefault?: boolean
 }
 
 export function Dashboard({ children }: DashboardProps) {
@@ -78,23 +72,15 @@ export function Dashboard({ children }: DashboardProps) {
         }
 
         // Load teams
-        const teamsRef = collection(db, 'teams')
-        const teamsQuery = query(teamsRef, where('workspaceId', '==', user.organizationId))
-        const teamsSnapshot = await getDocs(teamsQuery)
-        
-        const teamsData = teamsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Team[]
-
-        setTeams(teamsData)
+        const userTeams = await getUserTeams(user.uid, user.organizationId)
+        setTeams(userTeams)
         
         // Set active team to default team or first team
         if (user.defaultTeam) {
           setActiveTeam(user.defaultTeam)
-        } else if (teamsData.length > 0) {
-          const defaultTeam = teamsData.find(t => t.isDefault)
-          setActiveTeam(defaultTeam?.id || teamsData[0].id)
+        } else if (userTeams.length > 0) {
+          const defaultTeam = userTeams.find(t => t.isDefault)
+          setActiveTeam(defaultTeam?.id || userTeams[0].id)
         }
       } catch (error) {
         console.error('Error loading organization and teams:', error)
@@ -102,7 +88,7 @@ export function Dashboard({ children }: DashboardProps) {
     }
 
     loadOrganizationAndTeams()
-  }, [user?.organizationId, user?.defaultTeam])
+  }, [user?.organizationId, user?.defaultTeam, user?.uid])
 
   // Load videos from Firebase when component mounts or week changes
   useEffect(() => {
@@ -326,9 +312,11 @@ export function Dashboard({ children }: DashboardProps) {
         <div className="p-3 border-t border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Teams</span>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-              <Plus className="h-4 w-4" />
-            </Button>
+            <Link href="/dashboard/settings?tab=members">
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
           <div className="space-y-1">
             {teams.map((team) => (
@@ -344,6 +332,11 @@ export function Dashboard({ children }: DashboardProps) {
                 {team.name}
               </Button>
             ))}
+            {teams.length === 0 && (
+              <div className="text-sm text-gray-500 py-2 px-3">
+                No teams available
+              </div>
+            )}
           </div>
         </div>
 

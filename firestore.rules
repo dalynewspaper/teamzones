@@ -2,32 +2,35 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read and write their own data
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOrgMember(orgId) {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/organizations/$(orgId)).data.members.hasAny([request.auth.uid]);
+    }
+
+    // User profiles
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
-    
-    // Organizations can be read by members, created by any user, and updated by owners
+
+    // Organizations
     match /organizations/{orgId} {
-      allow read: if request.auth != null && (
-        resource.data.members[request.auth.uid] != null ||
-        resource.data.ownerId == request.auth.uid
-      );
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && resource.data.ownerId == request.auth.uid;
-    }
-    
-    // Teams can be read and updated by organization members
-    match /teams/{teamId} {
-      allow read: if request.auth != null && get(/databases/$(database)/documents/organizations/$(resource.data.workspaceId)).data.members[request.auth.uid] != null;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/organizations/$(resource.data.workspaceId)).data.ownerId == request.auth.uid;
-    }
-    
-    // Videos can be read by team members and written by their owners
-    match /videos/{videoId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read: if isSignedIn() && isOrgMember(orgId);
+      allow write: if isSignedIn() && isOrgMember(orgId);
+      
+      // Teams (nested under organizations)
+      match /teams/{teamId} {
+        allow read: if isSignedIn() && isOrgMember(orgId);
+        allow create: if isSignedIn() && isOrgMember(orgId);
+        allow update, delete: if isSignedIn() && 
+          isOrgMember(orgId) && 
+          resource.data.members[request.auth.uid].role == 'admin';
+      }
     }
   }
 }

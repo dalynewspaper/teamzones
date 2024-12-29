@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase'
-import { doc, collection, setDoc, query, where, getDocs, getDoc, DocumentData, QueryDocumentSnapshot, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore'
 import { Team } from '@/types/firestore'
 
 export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -8,6 +8,25 @@ export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'updatedA
   const now = new Date().toISOString()
   
   try {
+    // Validate team name
+    if (!data.name || data.name.trim().length < 2) {
+      throw new Error('Team name must be at least 2 characters long')
+    }
+
+    if (data.name.trim().length > 50) {
+      throw new Error('Team name must be less than 50 characters')
+    }
+
+    // Check for existing team with same name
+    const existingTeamQuery = query(
+      teamsRef,
+      where('name', '==', data.name.trim())
+    )
+    const existingTeams = await getDocs(existingTeamQuery)
+    if (!existingTeams.empty) {
+      throw new Error('A team with this name already exists')
+    }
+
     // First ensure General team exists and user is a member
     const generalTeam = await getGeneralTeam(data.organizationId)
     if (generalTeam && !generalTeam.members.some(m => m.userId === data.ownerId)) {
@@ -20,7 +39,7 @@ export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'updatedA
         }]
       })
     }
-    
+
     // Ensure members array is properly structured
     const members = data.members.map(member => ({
       userId: member.userId,
@@ -30,12 +49,12 @@ export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'updatedA
     
     const team: Team = {
       id: teamRef.id,
-      name: data.name,
-      description: data.description,
+      name: data.name.trim(),
+      description: data.description?.trim() || '',
       organizationId: data.organizationId,
       ownerId: data.ownerId,
       members,
-      isDefault: false,
+      isDefault: data.isDefault || false,
       createdAt: now,
       updatedAt: now
     }
@@ -75,72 +94,32 @@ export async function createGeneralTeam(organizationId: string, ownerId: string)
 
 export async function getGeneralTeam(organizationId: string): Promise<Team | null> {
   const teamsRef = collection(db, `organizations/${organizationId}/teams`)
-  const q = query(
-    teamsRef,
-    where('isDefault', '==', true)
-  )
+  const q = query(teamsRef, where('isDefault', '==', true))
+  const querySnapshot = await getDocs(q)
   
-  const snapshot = await getDocs(q)
-  if (snapshot.empty) {
-    // If no general team exists, create it
-    const userDoc = await getDoc(doc(db, 'organizations', organizationId))
-    if (userDoc.exists()) {
-      const ownerId = userDoc.data().ownerId
-      return createGeneralTeam(organizationId, ownerId)
-    }
+  if (querySnapshot.empty) {
     return null
   }
   
-  // If multiple General teams exist, keep the oldest one and delete the others
-  if (snapshot.docs.length > 1) {
-    // Sort by creation date to find the oldest
-    const sortedDocs = snapshot.docs.sort((a, b) => {
-      const aDate = new Date(a.data().createdAt)
-      const bDate = new Date(b.data().createdAt)
-      return aDate.getTime() - bDate.getTime()
-    })
-
-    // Keep the oldest one
-    const oldestDoc = sortedDocs[0]
-    
-    // Delete the duplicates
-    for (let i = 1; i < sortedDocs.length; i++) {
-      const duplicateRef = doc(teamsRef, sortedDocs[i].id)
-      await deleteDoc(duplicateRef)
-    }
-
-    return { id: oldestDoc.id, ...oldestDoc.data() } as Team
-  }
-  
-  // Return the single General team
-  const docSnapshot = snapshot.docs[0]
-  const data = docSnapshot.data()
-  return { id: docSnapshot.id, ...data } as Team
+  const doc = querySnapshot.docs[0]
+  return { id: doc.id, ...doc.data() } as Team
 }
 
 export async function getUserTeams(userId: string, organizationId: string): Promise<Team[]> {
-  if (!organizationId) return []
+  const teamsRef = collection(db, `organizations/${organizationId}/teams`)
   
   try {
-    // First ensure General team exists
-    await getGeneralTeam(organizationId)
-    
-    const teamsRef = collection(db, `organizations/${organizationId}/teams`)
     // Get all teams in the organization
-    const snapshot = await getDocs(teamsRef)
-    const teams = snapshot.docs.map(docSnapshot => ({ 
-      id: docSnapshot.id, 
-      ...docSnapshot.data() 
+    const querySnapshot = await getDocs(teamsRef)
+    const teams = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
     })) as Team[]
-    
-    // Filter teams where user is a member or the team is default
-    const userTeams = teams.filter(team => 
-      team.isDefault || 
+
+    // Filter teams where user is a member
+    return teams.filter(team => 
       team.members.some(member => member.userId === userId)
-    )
-    
-    // Sort teams so General appears first
-    return userTeams.sort((a, b) => {
+    ).sort((a, b) => {
       if (a.isDefault) return -1
       if (b.isDefault) return 1
       return 0
@@ -209,23 +188,26 @@ export async function updateTeamSettings(
   })
 }
 
-export async function deleteTeam(
-  organizationId: string,
-  teamId: string
-): Promise<void> {
+export async function deleteTeam(organizationId: string, teamId: string) {
   const teamRef = doc(db, `organizations/${organizationId}/teams/${teamId}`)
-  const teamDoc = await getDoc(teamRef)
   
-  if (!teamDoc.exists()) {
-    throw new Error('Team not found')
-  }
+  try {
+    // Get team data first to check if it's the default team
+    const teamSnap = await getDoc(teamRef)
+    if (!teamSnap.exists()) {
+      throw new Error('Team not found')
+    }
 
-  const team = teamDoc.data() as Team
-  if (team.isDefault) {
-    throw new Error('Cannot delete the default team')
-  }
+    const teamData = teamSnap.data() as Team
+    if (teamData.isDefault) {
+      throw new Error('Cannot delete the default team')
+    }
 
-  await deleteDoc(teamRef)
+    await deleteDoc(teamRef)
+  } catch (error) {
+    console.error('Error deleting team:', error)
+    throw error
+  }
 }
 
 export async function inviteTeamMember(

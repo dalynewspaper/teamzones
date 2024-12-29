@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -61,6 +61,22 @@ export function Dashboard({ children }: DashboardProps) {
   const [activeTeam, setActiveTeam] = useState<string | null>(null)
   const [isNewTeamModalOpen, setIsNewTeamModalOpen] = useState(false)
 
+  // Load organization name and teams
+  const loadTeams = useCallback(async () => {
+    if (!user?.organizationId || !user?.uid) return
+    try {
+      const userTeams = await getUserTeams(user.uid, user.organizationId)
+      setTeams(userTeams)
+      
+      if (userTeams.length > 0 && !activeTeam) {
+        const defaultTeam = userTeams.find(t => t.isDefault)
+        setActiveTeam(defaultTeam?.id || userTeams[0].id)
+      }
+    } catch (error) {
+      console.error('Error loading teams:', error)
+    }
+  }, [user?.organizationId, user?.uid])
+
   // Load organization name and teams when component mounts
   useEffect(() => {
     const loadOrganizationAndTeams = async () => {
@@ -75,23 +91,61 @@ export function Dashboard({ children }: DashboardProps) {
         }
 
         // Load teams
-        const userTeams = await getUserTeams(user.uid, user.organizationId)
-        setTeams(userTeams)
-        
-        // Set active team to default team or first team
-        if (user.defaultTeam) {
-          setActiveTeam(user.defaultTeam)
-        } else if (userTeams.length > 0) {
-          const defaultTeam = userTeams.find(t => t.isDefault)
-          setActiveTeam(defaultTeam?.id || userTeams[0].id)
-        }
+        await loadTeams()
       } catch (error) {
         console.error('Error loading organization and teams:', error)
       }
     }
 
     loadOrganizationAndTeams()
-  }, [user?.organizationId, user?.defaultTeam, user?.uid])
+  }, [user?.organizationId, loadTeams])
+
+  // Handle team selection
+  const handleTeamSelect = useCallback((teamId: string) => {
+    setActiveTeam(teamId)
+  }, [])
+
+  const handleTeamCreated = useCallback(async () => {
+    await loadTeams()
+    setIsNewTeamModalOpen(false)
+  }, [loadTeams])
+
+  // Teams Section JSX
+  const teamsSection = (
+    <div className="p-3 border-t border-gray-200">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Teams</span>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-6 w-6 p-0"
+          onClick={() => setIsNewTeamModalOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="space-y-1">
+        {teams.map((team) => (
+          <Button
+            key={team.id}
+            variant="ghost"
+            className={`w-full justify-start text-sm font-medium ${
+              activeTeam === team.id ? 'bg-gray-100' : ''
+            }`}
+            onClick={() => handleTeamSelect(team.id)}
+          >
+            <Users className="h-4 w-4 mr-3 flex-shrink-0" />
+            <span className="truncate">{team.name}</span>
+          </Button>
+        ))}
+        {teams.length === 0 && (
+          <div className="text-sm text-gray-500 py-2 px-3">
+            No teams available
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   // Load videos from Firebase when component mounts or week changes
   useEffect(() => {
@@ -272,17 +326,6 @@ export function Dashboard({ children }: DashboardProps) {
     // You could show a toast or error message here
   }
 
-  const handleTeamCreated = async () => {
-    if (!user?.organizationId) return
-    
-    try {
-      const userTeams = await getUserTeams(user.uid, user.organizationId)
-      setTeams(userTeams)
-    } catch (error) {
-      console.error('Error loading teams:', error)
-    }
-  }
-
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -323,39 +366,7 @@ export function Dashboard({ children }: DashboardProps) {
         </nav>
 
         {/* Teams Section */}
-        <div className="p-3 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Teams</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-6 w-6 p-0"
-              onClick={() => setIsNewTeamModalOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-1">
-            {teams.map((team) => (
-              <Button
-                key={team.id}
-                variant="ghost"
-                className={`w-full justify-start text-sm font-medium ${
-                  activeTeam === team.id ? 'bg-gray-100' : ''
-                }`}
-                onClick={() => setActiveTeam(team.id)}
-              >
-                <Users className="h-4 w-4 mr-3 flex-shrink-0" />
-                <span className="truncate">{team.name}</span>
-              </Button>
-            ))}
-            {teams.length === 0 && (
-              <div className="text-sm text-gray-500 py-2 px-3">
-                No teams available
-              </div>
-            )}
-          </div>
-        </div>
+        {teamsSection}
 
         {/* User Section */}
         <div className="p-3 border-t border-gray-200">
@@ -374,6 +385,13 @@ export function Dashboard({ children }: DashboardProps) {
             Sign Out
           </Button>
         </div>
+
+        {/* Add NewTeamModal */}
+        <NewTeamModal
+          isOpen={isNewTeamModalOpen}
+          onClose={() => setIsNewTeamModalOpen(false)}
+          onTeamCreated={handleTeamCreated}
+        />
       </div>
 
       {/* Main Content */}
@@ -556,13 +574,6 @@ export function Dashboard({ children }: DashboardProps) {
           </div>
         </div>
       )}
-
-      {/* Add NewTeamModal */}
-      <NewTeamModal
-        isOpen={isNewTeamModalOpen}
-        onClose={() => setIsNewTeamModalOpen(false)}
-        onTeamCreated={handleTeamCreated}
-      />
     </div>
   )
 } 

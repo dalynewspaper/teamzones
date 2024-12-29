@@ -2,7 +2,7 @@ import { initializeApp, getApps } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
 import { 
   getFirestore, 
-  connectFirestoreEmulator, 
+  connectFirestoreEmulator,
   enableMultiTabIndexedDbPersistence,
   enableIndexedDbPersistence
 } from 'firebase/firestore'
@@ -18,40 +18,62 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-const auth = getAuth(app)
-const db = getFirestore(app)
-const storage = getStorage(app)
+let app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+let auth = getAuth(app)
+let db = getFirestore(app)
+let storage = getStorage(app)
 
 // Connect to emulators in development
 if (process.env.NODE_ENV === 'development') {
-  connectAuthEmulator(auth, 'http://localhost:9099')
-  connectFirestoreEmulator(db, 'localhost', 8080)
-  connectStorageEmulator(storage, 'localhost', 9199)
-}
-
-// Configure Firestore for offline persistence
-const initializeFirestore = async () => {
   try {
-    // Try enabling multi-tab persistence first
-    await enableMultiTabIndexedDbPersistence(db)
-  } catch (err: any) {
-    if (err.code === 'failed-precondition') {
-      // If multi-tab is not supported, fall back to single-tab persistence
-      try {
-        await enableIndexedDbPersistence(db)
-      } catch (singleTabErr: any) {
-        console.warn('Error enabling single-tab persistence:', singleTabErr)
-      }
-    } else if (err.code === 'unimplemented') {
-      console.warn('Browser does not support persistence')
-    } else {
-      console.error('Error initializing Firestore persistence:', err)
-    }
+    // Connect to Auth emulator first
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
+    
+    // Then connect to Firestore emulator
+    connectFirestoreEmulator(db, 'localhost', 8081)
+    
+    // Finally connect to Storage emulator
+    connectStorageEmulator(storage, 'localhost', 9199)
+    
+    // Reinitialize Firebase with emulator settings
+    app = getApps()[0]
+    auth = getAuth(app)
+    db = getFirestore(app)
+    storage = getStorage(app)
+    
+    console.log('Successfully connected to Firebase emulators')
+  } catch (error) {
+    console.error('Error connecting to emulators:', error)
   }
 }
 
-// Initialize persistence
-initializeFirestore()
+// Skip persistence in development/emulator mode
+if (process.env.NODE_ENV !== 'development') {
+  // Configure Firestore for offline persistence
+  const initializeFirestore = async () => {
+    try {
+      // Try enabling multi-tab persistence first
+      await enableMultiTabIndexedDbPersistence(db)
+      console.log('Multi-tab persistence enabled')
+    } catch (err: any) {
+      if (err.code === 'failed-precondition') {
+        // If multi-tab is not supported, fall back to single-tab persistence
+        try {
+          await enableIndexedDbPersistence(db)
+          console.log('Single-tab persistence enabled')
+        } catch (singleTabErr: any) {
+          console.warn('Error enabling single-tab persistence:', singleTabErr)
+        }
+      } else if (err.code === 'unimplemented') {
+        console.warn('Browser does not support persistence')
+      } else {
+        console.error('Error initializing Firestore persistence:', err)
+      }
+    }
+  }
+
+  // Initialize persistence
+  initializeFirestore()
+}
 
 export { app, auth, db, storage }

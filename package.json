@@ -7,6 +7,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google-cloud/speech": "^6.7.0",
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",

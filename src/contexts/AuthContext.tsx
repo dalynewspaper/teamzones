@@ -1,12 +1,12 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useMemo } from 'react'
-import { auth } from '@/lib/firebase'
+import { auth, db } from '@/lib/firebase'
 import { User } from 'firebase/auth'
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
 import { MicrosoftAuthProvider } from '@/lib/microsoft-auth'
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, setDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { createGeneralTeam, getGeneralTeam } from '@/services/teamService'
 
 interface ExtendedUser {
   uid: string
@@ -33,55 +33,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          // Get user document
-          const userRef = doc(db, 'users', firebaseUser.uid)
-          const userSnap = await getDoc(userRef)
-          const userData = userSnap.exists() ? userSnap.data() : null
+    let unsubscribe: (() => void) | undefined
 
-          // If user exists and has organization, use that data
-          if (userData?.organizationId) {
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              organizationId: userData.organizationId,
-              teams: userData.teams || [],
-              defaultTeam: userData.defaultTeam
-            })
-          } else {
-            // New user or no organization - set up workspace
-            await handleUserWorkspace(firebaseUser)
-            
-            // Fetch updated user data
-            const updatedUserSnap = await getDoc(userRef)
-            const updatedUserData = updatedUserSnap.data()
-            
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              organizationId: updatedUserData?.organizationId || null,
-              teams: updatedUserData?.teams || [],
-              defaultTeam: updatedUserData?.defaultTeam
-            })
+    const initializeAuth = async () => {
+      try {
+        unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+          try {
+            if (firebaseUser) {
+              // Get user document
+              const userRef = doc(db, 'users', firebaseUser.uid)
+              const userSnap = await getDoc(userRef)
+              const userData = userSnap.exists() ? userSnap.data() : null
+
+              // If user exists and has organization, use that data
+              if (userData?.organizationId) {
+                // Ensure user is in General team
+                const generalTeam = await getGeneralTeam(userData.organizationId)
+                if (generalTeam && !generalTeam.members.some(m => m.userId === firebaseUser.uid)) {
+                  await updateDoc(doc(db, `organizations/${userData.organizationId}/teams/${generalTeam.id}`), {
+                    members: [...generalTeam.members, {
+                      userId: firebaseUser.uid,
+                      role: 'member',
+                      joinedAt: new Date().toISOString()
+                    }]
+                  })
+                }
+
+                setUser({
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  displayName: firebaseUser.displayName,
+                  photoURL: firebaseUser.photoURL,
+                  organizationId: userData.organizationId,
+                  teams: userData.teams || [],
+                  defaultTeam: userData.defaultTeam
+                })
+              } else {
+                // New user or no organization - set up workspace
+                await handleUserWorkspace(firebaseUser)
+                
+                // Fetch updated user data
+                const updatedUserSnap = await getDoc(userRef)
+                const updatedUserData = updatedUserSnap.data()
+                
+                setUser({
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  displayName: firebaseUser.displayName,
+                  photoURL: firebaseUser.photoURL,
+                  organizationId: updatedUserData?.organizationId || null,
+                  teams: updatedUserData?.teams || [],
+                  defaultTeam: updatedUserData?.defaultTeam
+                })
+              }
+            } else {
+              setUser(null)
+            }
+          } catch (error) {
+            console.error('Error fetching user data:', error)
+            setUser(null)
+          } finally {
+            setLoading(false)
           }
-        } else {
-          setUser(null)
-        }
+        })
       } catch (error) {
-        console.error('Error fetching user data:', error)
-        setUser(null)
-      } finally {
+        console.error('Error initializing auth:', error)
         setLoading(false)
       }
-    })
+    }
 
-    return () => unsubscribe()
+    initializeAuth()
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe()
+      }
+    }
   }, [])
 
   const handleUserWorkspace = async (user: User, organizationDetails?: { name: string; domain: string }) => {
@@ -114,16 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         organizationId = workspaceDoc.id
 
         // Create General team
-        const teamsRef = collection(db, 'teams')
-        const generalTeam = await addDoc(teamsRef, {
-          name: 'General',
-          description: 'Company-wide team for all members',
-          workspaceId: organizationId,
-          members: [user.uid],
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        })
+        const generalTeam = await createGeneralTeam(organizationId, user.uid)
         defaultTeamId = generalTeam.id
       } else {
         // Join existing workspace
@@ -138,36 +156,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
         }
 
-        // Get General team
-        const teamsRef = collection(db, 'teams')
-        const teamsQuery = query(
-          teamsRef,
-          where('workspaceId', '==', organizationId),
-          where('isDefault', '==', true)
-        )
-        const teamsSnapshot = await getDocs(teamsQuery)
-        
-        if (teamsSnapshot.empty) {
+        // Get or create General team
+        const generalTeam = await getGeneralTeam(organizationId)
+        if (!generalTeam) {
           // Create General team if it doesn't exist
-          const generalTeam = await addDoc(teamsRef, {
-            name: 'General',
-            description: 'Company-wide team for all members',
-            workspaceId: organizationId,
-            members: [user.uid],
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          })
-          defaultTeamId = generalTeam.id
+          const newGeneralTeam = await createGeneralTeam(organizationId, user.uid)
+          defaultTeamId = newGeneralTeam.id
         } else {
-          const generalTeam = teamsSnapshot.docs[0]
           defaultTeamId = generalTeam.id
           
-          // Add user to General team
-          const teamMembers = generalTeam.data().members || []
-          if (!teamMembers.includes(user.uid)) {
-            await updateDoc(generalTeam.ref, {
-              members: [...teamMembers, user.uid]
+          // Add user to General team if not already a member
+          if (!generalTeam.members.some(m => m.userId === user.uid)) {
+            await updateDoc(doc(db, `organizations/${organizationId}/teams/${generalTeam.id}`), {
+              members: [...generalTeam.members, {
+                userId: user.uid,
+                role: 'member',
+                joinedAt: new Date().toISOString()
+              }]
             })
           }
         }

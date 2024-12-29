@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle } from 'lucide-react'
+import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle, Target, BarChart3, Activity } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
@@ -343,26 +343,54 @@ export function Dashboard({ children }: DashboardProps) {
             {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sm mt-2 text-[#4263EB] hover:text-[#3b5bdb] hover:bg-blue-50"
+            onClick={() => router.push('/dashboard/settings?tab=members')}
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Invite teammates
+          </Button>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1">
-          <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-            <Home className="h-4 w-4 mr-3" />
-            Home
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-            <Clock className="h-4 w-4 mr-3" />
-            Recent
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-            <Star className="h-4 w-4 mr-3" />
-            Starred
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-            <Inbox className="h-4 w-4 mr-3" />
-            Inbox
-          </Button>
+          <Link href="/dashboard">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Home className="h-4 w-4 mr-3" />
+              Home
+            </Button>
+          </Link>
+          <Link href="/dashboard/goals">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Target className="h-4 w-4 mr-3" />
+              Goals
+            </Button>
+          </Link>
+          <Link href="/dashboard/updates">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Video className="h-4 w-4 mr-3" />
+              My Updates
+            </Button>
+          </Link>
+          <Link href="/dashboard/insights">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <BarChart3 className="h-4 w-4 mr-3" />
+              Insights
+            </Button>
+          </Link>
+          <Link href="/dashboard/activity">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Activity className="h-4 w-4 mr-3" />
+              Activity
+            </Button>
+          </Link>
+          <Link href="/dashboard/settings">
+            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+              <Settings className="h-4 w-4 mr-3" />
+              Settings
+            </Button>
+          </Link>
         </nav>
 
         {/* Teams Section */}
@@ -370,12 +398,6 @@ export function Dashboard({ children }: DashboardProps) {
 
         {/* User Section */}
         <div className="p-3 border-t border-gray-200">
-          <Link href="/dashboard/settings">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Settings className="h-4 w-4 mr-3" />
-              Settings
-            </Button>
-          </Link>
           <Button 
             variant="ghost" 
             className="w-full justify-start text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50"

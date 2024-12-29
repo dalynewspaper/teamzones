@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Home, Video, Target, BarChart3, Activity, Settings, ChevronDown, Plus, Users, WifiOff, RefreshCw } from 'lucide-react'
+import { Home, Video, Target, BarChart3, Activity, Settings, ChevronDown, Plus, Users, WifiOff, RefreshCw, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore'
 import { getUserTeams } from '@/services/teamService'
 import { Team } from '@/types/firestore'
+import { useToast } from '@/components/ui/use-toast'
 
 // Enable offline persistence
 try {
@@ -22,17 +23,31 @@ try {
   console.warn('Error enabling persistence:', err)
 }
 
+function TeamItem({ team }: { team: Team }) {
+  return (
+    <div className="flex items-center">
+      <Button
+        variant="ghost"
+        className="w-full justify-start text-sm font-medium h-9 px-2"
+      >
+        <Users className="h-4 w-4 mr-2" />
+        {team.name}
+      </Button>
+    </div>
+  )
+}
+
 export function Sidebar() {
   const { user } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const { toast } = useToast()
   const [organizationName, setOrganizationName] = useState('')
   const [teams, setTeams] = useState<Team[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Monitor online/offline status
   useEffect(() => {
     const handleOnline = () => setIsOffline(false)
     const handleOffline = () => setIsOffline(true)
@@ -46,7 +61,7 @@ export function Sidebar() {
     }
   }, [])
 
-  const loadOrganization = async () => {
+  const loadOrganization = useCallback(async () => {
     if (!user?.organizationId) return
 
     try {
@@ -63,9 +78,9 @@ export function Sidebar() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user?.organizationId])
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     if (!user?.uid || !user?.organizationId) return
 
     try {
@@ -79,18 +94,18 @@ export function Sidebar() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user?.uid, user?.organizationId])
 
   useEffect(() => {
     loadOrganization()
     loadTeams()
-  }, [user?.uid, user?.organizationId])
+  }, [loadOrganization, loadTeams])
 
-  const handleRetry = () => {
+  const handleRetry = useCallback(() => {
     setError(null)
     loadOrganization()
     loadTeams()
-  }
+  }, [loadOrganization, loadTeams])
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
@@ -99,6 +114,15 @@ export function Sidebar() {
         <Button variant="ghost" className="w-full justify-between text-sm font-medium">
           {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
           <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-sm mt-1 text-gray-500 hover:text-gray-900"
+          onClick={() => router.push('/dashboard/settings?tab=members')}
+        >
+          <UserPlus className="h-4 w-4 mr-2" />
+          Invite Team Members
         </Button>
         {isOffline && (
           <div className="flex items-center justify-center gap-2 py-1 px-2 bg-yellow-50 text-yellow-700 text-xs">
@@ -169,7 +193,7 @@ export function Sidebar() {
       {/* Teams Section */}
       <div className="p-3 border-t border-gray-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-500">Teams</h3>
+          <h3 className="text-sm font-medium text-gray-500">TEAMS</h3>
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Plus className="h-4 w-4" />
           </Button>
@@ -190,15 +214,11 @@ export function Sidebar() {
               </Button>
             </div>
           ) : teams.length > 0 ? (
-            teams.map((team) => (
-              <Button
-                key={team.id}
-                variant="ghost"
-                className="w-full justify-start text-sm font-medium"
-              >
-                <Users className="h-4 w-4 mr-3" />
-                {team.name}
-              </Button>
+            teams.map(team => (
+              <TeamItem 
+                key={team.id} 
+                team={team}
+              />
             ))
           ) : (
             <p className="text-sm text-gray-500">

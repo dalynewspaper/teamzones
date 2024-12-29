@@ -1,5 +1,9 @@
 'use client'
 import { EyeIcon, ChatBubbleLeftIcon, HeartIcon } from '@heroicons/react/24/outline'
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { getUserTeams } from '@/services/teamService'
+import { Team } from '@/types/firestore'
 
 interface Video {
   id: string
@@ -11,12 +15,36 @@ interface Video {
   comments: number
   likes: number
   isShared: boolean
+  teamId?: string
 }
 
 export function VideoGrid({ videos }: { videos: Video[] }) {
+  const { user } = useAuth()
+  const [teams, setTeams] = useState<Team[]>([])
+  const [filteredVideos, setFilteredVideos] = useState<Video[]>(videos)
+
+  useEffect(() => {
+    const loadTeams = async () => {
+      if (user?.uid && user?.organizationId) {
+        const userTeams = await getUserTeams(user.uid, user.organizationId)
+        setTeams(userTeams)
+      }
+    }
+    loadTeams()
+  }, [user?.uid, user?.organizationId])
+
+  useEffect(() => {
+    // Filter videos based on team visibility
+    const filtered = videos.filter(video => 
+      !video.teamId || teams.some(team => team.id === video.teamId)
+    )
+
+    setFilteredVideos(filtered)
+  }, [teams, videos])
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {videos.map((video) => (
+      {filteredVideos.map((video) => (
         <div key={video.id} className="bg-white rounded-lg overflow-hidden shadow-sm border">
           <div className="relative">
             <img 

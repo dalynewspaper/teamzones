@@ -15,6 +15,8 @@ import { getOrganizationSettings } from '@/services/settingsService'
 import { createTeam, getUserTeams, createGeneralTeam } from '@/services/teamService'
 import { Team } from '@/types/firestore'
 import { TeamManagement } from '@/components/settings/TeamManagement'
+import { MembersTab } from '@/components/settings/MembersTab'
+import { useSearchParams } from 'next/navigation'
 
 interface Tab {
   id: string
@@ -25,7 +27,9 @@ interface Tab {
 
 export function SettingsContent() {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState('my-account')
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab') || 'my-account'
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
@@ -277,7 +281,51 @@ export function SettingsContent() {
     )
   }
 
-  // Define tab content outside of the render to avoid hook issues
+  // Define tabs array using the memoized content
+  const tabs: Tab[] = useMemo(() => [
+    {
+      id: 'my-account',
+      label: 'My Account',
+      icon: User
+    },
+    {
+      id: 'members',
+      label: 'Teams & Members',
+      icon: Users
+    },
+    {
+      id: 'recording',
+      label: 'Recording',
+      icon: Camera
+    },
+    {
+      id: 'workspace',
+      label: 'Workspace',
+      icon: Building2
+    },
+    {
+      id: 'billing',
+      label: 'Plan & Billing',
+      icon: CreditCard
+    },
+    {
+      id: 'insights',
+      label: 'Insights',
+      icon: BarChart
+    },
+    {
+      id: 'appearance',
+      label: 'Appearance',
+      icon: Palette
+    },
+    {
+      id: 'integrations',
+      label: 'Integrations',
+      icon: LinkIcon
+    }
+  ], [])
+
+  // Keep the existing tabContent definition
   const tabContent = useMemo(() => ({
     'my-account': (
       <div className="space-y-8">
@@ -386,6 +434,74 @@ export function SettingsContent() {
             {loading ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
+      </div>
+    ),
+    'members': (
+      <div className="space-y-8">
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Teams</h2>
+          <div className="space-y-6">
+            {!user?.organizationId ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Teams Available</h3>
+                <p className="text-sm text-gray-500">
+                  You need to be part of a workspace to manage teams.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-medium">Teams</h3>
+                    <p className="text-sm text-gray-500">Manage your workspace teams</p>
+                  </div>
+                  <Button onClick={() => setIsCreatingTeam(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Team
+                  </Button>
+                </div>
+
+                <div className="border rounded-lg divide-y">
+                  {teams.map((team) => (
+                    <div key={team.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <Users className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-medium truncate">{team.name}</h4>
+                          {team.description && (
+                            <p className="text-xs text-gray-500 truncate">{team.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {team.members.find(m => m.userId === user?.uid)?.role === 'admin' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => setActiveTeam(team)}
+                          >
+                            Manage
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Workspace Members</h2>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Invite new members to join your workspace
+            </p>
+            <MembersTab />
+          </div>
+        </section>
       </div>
     ),
     'recording': (
@@ -537,128 +653,8 @@ export function SettingsContent() {
           </>
         )}
       </div>
-    ),
-    'members': (
-      <div className="space-y-8">
-        <section>
-          <h2 className="text-lg font-semibold mb-4">Teams</h2>
-          <div className="space-y-6">
-            {!user?.organizationId ? (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No Teams Available</h3>
-                <p className="text-sm text-gray-500">
-                  You need to be part of a workspace to manage teams.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="text-sm font-medium">Teams</h3>
-                    <p className="text-sm text-gray-500">Manage your workspace teams</p>
-                  </div>
-                  <Button onClick={() => setIsCreatingTeam(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Team
-                  </Button>
-                </div>
-
-                <div className="border rounded-lg divide-y">
-                  {teams.map((team) => (
-                    <div key={team.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                      <div className="flex items-center gap-3">
-                        <Users className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-medium truncate">{team.name}</h4>
-                          {team.description && (
-                            <p className="text-xs text-gray-500 truncate">{team.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {team.members.find(m => m.userId === user?.uid)?.role === 'admin' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setActiveTeam(team)}
-                          >
-                            Manage
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-lg font-semibold mb-4">Workspace Members</h2>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-medium">Members</h3>
-                <p className="text-sm text-gray-500">People with access to your workspace</p>
-              </div>
-              <Button onClick={() => {/* TODO: Implement invite members */}}>
-                <Plus className="h-4 w-4 mr-2" />
-                Invite Members
-              </Button>
-            </div>
-
-            {/* TODO: List workspace members here */}
-          </div>
-        </section>
-      </div>
     )
   }), [personalSettings, orgSettings, teams, user, loading, error, isCreatingWorkspace, isCreatingTeam, handlePersonalSettingsSave, handleSaveWorkspaceSettings, handleCreateWorkspace])
-
-  // Define tabs array
-  const tabs: Tab[] = useMemo(() => [
-    {
-      id: 'my-account',
-      label: 'My Account',
-      icon: User
-    },
-    {
-      id: 'recording',
-      label: 'Recording',
-      icon: Camera
-    },
-    {
-      id: 'workspace',
-      label: 'Workspace',
-      icon: Building2
-    },
-    {
-      id: 'billing',
-      label: 'Plan & Billing',
-      icon: CreditCard
-    },
-    {
-      id: 'members',
-      label: 'Members',
-      icon: Users
-    },
-    {
-      id: 'insights',
-      label: 'Insights',
-      icon: BarChart
-    },
-    {
-      id: 'appearance',
-      label: 'Appearance',
-      icon: Palette
-    },
-    {
-      id: 'integrations',
-      label: 'Integrations',
-      icon: LinkIcon
-    }
-  ], [])
 
   return (
     <>

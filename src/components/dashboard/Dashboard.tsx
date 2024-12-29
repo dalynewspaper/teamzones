@@ -297,7 +297,7 @@ export function Dashboard({ children }: DashboardProps) {
         {/* Workspace Selector */}
         <div className="px-3 py-2 border-b border-gray-200">
           <Button variant="ghost" className="w-full justify-between text-sm font-medium">
-            {organizationName || 'Loading...'}
+            {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </div>
@@ -345,8 +345,8 @@ export function Dashboard({ children }: DashboardProps) {
                 }`}
                 onClick={() => setActiveTeam(team.id)}
               >
-                <Users className="h-4 w-4 mr-3" />
-                {team.name}
+                <Users className="h-4 w-4 mr-3 flex-shrink-0" />
+                <span className="truncate">{team.name}</span>
               </Button>
             ))}
             {teams.length === 0 && (

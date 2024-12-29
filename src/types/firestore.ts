@@ -61,17 +61,17 @@ export interface Organization {
   domain: string
   employeeCount: string
   ownerId: string
-  createdAt: string
-  updatedAt: string
+  members: {
+    userId: string
+    role: 'admin' | 'member'
+    joinedAt: string
+  }[]
   settings: {
     allowedDomains: string[]
     weekStartDay: number
   }
-  branding?: {
-    logo?: string
-    icon?: string
-    colors?: string[]
-  }
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Team {

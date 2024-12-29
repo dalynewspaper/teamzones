@@ -177,6 +177,9 @@ export function OrganizationSetup() {
               onChange={(e) => setOrgData(d => ({ ...d, name: e.target.value }))}
               placeholder="Acme Inc."
             />
+            <p className="mt-1 text-sm text-gray-500">
+              Will be displayed as "{orgData.name}'s Workspace"
+            </p>
           </div>
 
           <div>

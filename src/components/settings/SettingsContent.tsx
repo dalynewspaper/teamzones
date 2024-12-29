@@ -452,6 +452,9 @@ export function SettingsContent() {
                       onChange={(e) => setOrgSettings(s => ({ ...s, name: e.target.value }))}
                       placeholder="Enter workspace name"
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Will be displayed as "{orgSettings.name}'s Workspace"
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Workspace Domain</label>
@@ -509,6 +512,9 @@ export function SettingsContent() {
                     value={orgSettings.name}
                     onChange={(e) => setOrgSettings(s => ({ ...s, name: e.target.value }))}
                   />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Will be displayed as "{orgSettings.name}'s Workspace"
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium">Workspace Domain</label>
@@ -562,11 +568,11 @@ export function SettingsContent() {
                   {teams.map((team) => (
                     <div key={team.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
                       <div className="flex items-center gap-3">
-                        <Users className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <h4 className="text-sm font-medium">{team.name}</h4>
+                        <Users className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-medium truncate">{team.name}</h4>
                           {team.description && (
-                            <p className="text-xs text-gray-500">{team.description}</p>
+                            <p className="text-xs text-gray-500 truncate">{team.description}</p>
                           )}
                         </div>
                       </div>

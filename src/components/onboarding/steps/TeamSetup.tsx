@@ -26,12 +26,17 @@ export function TeamSetup() {
       setLoading(true)
       setError(null)
 
-      // Create organization
+      // Create organization with members array
       const organization = await createOrganization({
         name: teamData.name,
         domain: user.email?.split('@')[1] || '',
         employeeCount: '1-10',
         ownerId: user.uid,
+        members: [{
+          userId: user.uid,
+          role: 'admin',
+          joinedAt: new Date().toISOString()
+        }],
         settings: {
           allowedDomains: [user.email?.split('@')[1] || ''],
           weekStartDay: 1
@@ -69,22 +74,20 @@ export function TeamSetup() {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Create Your Team</h3>
+          <h3 className="text-lg font-medium">Team Setup</h3>
           <p className="text-sm text-gray-500">
-            Set up your team workspace
+            Create your first team to get started
           </p>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Team Name</label>
-            <Input
-              required
-              value={teamData.name}
-              onChange={(e) => setTeamData(d => ({ ...d, name: e.target.value }))}
-              placeholder="My Team"
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium">Team Name</label>
+          <Input
+            required
+            value={teamData.name}
+            onChange={(e) => setTeamData({ name: e.target.value })}
+            placeholder="My Team"
+          />
         </div>
       </div>
 
@@ -95,7 +98,7 @@ export function TeamSetup() {
       )}
 
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? 'Creating Team...' : 'Create Team'}
+        {loading ? 'Creating...' : 'Create Team'}
       </Button>
     </form>
   )

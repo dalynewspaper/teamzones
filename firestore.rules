@@ -8,29 +8,54 @@ service cloud.firestore {
     }
     
     function isOrgMember(orgId) {
-      return isSignedIn() && 
-        get(/databases/$(database)/documents/organizations/$(orgId)).data.members.hasAny([request.auth.uid]);
+      let org = get(/databases/$(database)/documents/organizations/$(orgId));
+      return isSignedIn() && (
+        !exists(/databases/$(database)/documents/organizations/$(orgId)) ||  // Allow if org doesn't exist yet
+        (org.data.members is list && org.data.members.hasAny([request.auth.uid]))  // Check if user is in members array
+      );
     }
 
     // User profiles
     match /users/{userId} {
-      allow read: if isSignedIn() && request.auth.uid == userId;
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn();
     }
 
-    // Organizations
+    // Organizations and their subcollections
     match /organizations/{orgId} {
-      allow read: if isSignedIn() && isOrgMember(orgId);
-      allow write: if isSignedIn() && isOrgMember(orgId);
-      
-      // Teams (nested under organizations)
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && isOrgMember(orgId);
+
+      // Teams subcollection
       match /teams/{teamId} {
-        allow read: if isSignedIn() && isOrgMember(orgId);
+        allow read, list: if isSignedIn() && isOrgMember(orgId);
         allow create: if isSignedIn() && isOrgMember(orgId);
-        allow update, delete: if isSignedIn() && 
-          isOrgMember(orgId) && 
-          resource.data.members[request.auth.uid].role == 'admin';
+        allow update, delete: if isSignedIn() && isOrgMember(orgId);
       }
+
+      // Videos subcollection
+      match /videos/{videoId} {
+        allow read, list: if isSignedIn() && isOrgMember(orgId);
+        allow create: if isSignedIn() && isOrgMember(orgId);
+        allow update, delete: if isSignedIn() && isOrgMember(orgId);
+      }
+    }
+
+    // Legacy collections - keeping for backward compatibility
+    match /teams/{teamId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    match /videos/{videoId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read, write: if isSignedIn();
     }
   }
 }

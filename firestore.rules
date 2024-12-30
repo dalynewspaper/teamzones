@@ -6,45 +6,106 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // User profiles
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    function isOrgMember(orgId) {
+      let org = get(/databases/$(database)/documents/organizations/$(orgId));
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+             org.data.members != null &&
+             request.auth.uid in org.data.members;
+    }
+
+    function isTeamMember(orgId, teamId) {
+      let team = get(/databases/$(database)/documents/organizations/$(orgId)/teams/$(teamId));
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/organizations/$(orgId)/teams/$(teamId)) &&
+             team.data.members != null &&
+             team.data.members.size() > 0 &&
+             team.data.members[0].userId == request.auth.uid;
+    }
+
+    function isTeamAdmin(orgId, teamId) {
+      let team = get(/databases/$(database)/documents/organizations/$(orgId)/teams/$(teamId));
+      return isSignedIn() && 
+             team.data.members != null &&
+             team.data.members.size() > 0 &&
+             team.data.members[0].userId == request.auth.uid &&
+             team.data.members[0].role == 'admin';
+    }
+
+    // Allow access to user profiles
     match /users/{userId} {
-      // Allow users to create and update their own profile
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && userId == request.auth.uid;
       allow update: if isSignedIn() && userId == request.auth.uid;
-      
-      // Allow any signed-in user to read profiles
-      allow read: if isSignedIn();
+      allow delete: if false;
     }
 
-    // Organizations
-    match /organizations/{orgId} {
-      allow read, create: if isSignedIn();
-      allow update: if isSignedIn() && 
-                   exists(/databases/$(database)/documents/organizations/$(orgId)) &&
-                   get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
-
-      // Teams subcollection
-      match /teams/{teamId} {
-        allow read, write: if isSignedIn();
-      }
-
-      // Videos subcollection
-      match /videos/{videoId} {
-        allow read, write: if isSignedIn();
-      }
+    // Allow access to onboarding data
+    match /onboarding/{userId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if isSignedIn() && userId == request.auth.uid;
     }
 
-    // Legacy collections
-    match /teams/{teamId} {
-      allow read, write: if isSignedIn();
-    }
-
+    // Allow access to videos collection at root level
     match /videos/{videoId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        (resource.data.organizationId != null && 
+         isTeamAdmin(resource.data.organizationId, resource.data.teamId))
+      );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    match /workspaces/{workspaceId} {
-      allow read, write: if isSignedIn();
+    // Allow access to organizations
+    match /organizations/{orgId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                   request.resource.data.ownerId == request.auth.uid &&
+                   request.resource.data.members != null &&
+                   request.auth.uid in request.resource.data.members;
+      allow update: if isSignedIn() && 
+                   (isOwner(resource.data.ownerId) || 
+                   request.auth.uid in resource.data.members);
+      allow delete: if false;
+
+      match /teams/{teamId} {
+        allow read: if isSignedIn() && isOrgMember(orgId);
+        allow create: if isSignedIn() && 
+                     isOrgMember(orgId) &&
+                     request.resource.data.members != null &&
+                     request.resource.data.members.size() > 0 &&
+                     request.resource.data.members[0].userId == request.auth.uid &&
+                     request.resource.data.members[0].role == 'admin';
+        allow update: if isSignedIn() && 
+                     (isTeamAdmin(orgId, teamId) || 
+                     isOwner(get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId));
+        allow delete: if isSignedIn() && 
+                     (isTeamAdmin(orgId, teamId) || 
+                     isOwner(get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId));
+      }
+
+      match /videos/{videoId} {
+        allow read: if isSignedIn() && isOrgMember(orgId);
+        allow create: if isSignedIn() && 
+                     isOrgMember(orgId) &&
+                     request.resource.data.createdBy == request.auth.uid;
+        allow update: if isSignedIn() && 
+                     isOrgMember(orgId) &&
+                     (resource.data.createdBy == request.auth.uid || 
+                     isTeamAdmin(orgId, resource.data.teamId));
+        allow delete: if isSignedIn() && 
+                     isOrgMember(orgId) &&
+                     (resource.data.createdBy == request.auth.uid || 
+                     isTeamAdmin(orgId, resource.data.teamId));
+      }
     }
   }
 }

@@ -38,7 +38,7 @@ function TeamItem({ team }: { team: Team }) {
 }
 
 export function Sidebar() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const { toast } = useToast()
@@ -97,15 +97,27 @@ export function Sidebar() {
   }, [user?.uid, user?.organizationId])
 
   useEffect(() => {
-    loadOrganization()
-    loadTeams()
-  }, [loadOrganization, loadTeams])
+    if (!authLoading && user) {
+      loadOrganization()
+      loadTeams()
+    }
+  }, [authLoading, user, loadOrganization, loadTeams])
 
   const handleRetry = useCallback(() => {
     setError(null)
     loadOrganization()
     loadTeams()
   }, [loadOrganization, loadTeams])
+
+  if (authLoading) {
+    return (
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
+        <div className="p-4 text-center">
+          <p className="text-sm text-gray-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Goal, GoalTimeframe, GoalType, GoalMetric } from '@/types/goals'
+import { Goal, GoalTimeframe, GoalType, GoalMetric, KeyResult } from '@/types/goals'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight, Plus, Target, AlertCircle, CheckCircle2 } from 'lucide-react'
@@ -55,6 +55,12 @@ function GoalItem({ goal, level, timeframe, onAddSubgoal, childGoals = [] }: Goa
     }
   }
 
+  const getTotalMetricsCount = () => {
+    const topLevelMetrics = goal.metrics?.length || 0
+    const keyResultMetrics = goal.keyResults?.reduce((total, kr) => total + (kr.metrics?.length || 0), 0) || 0
+    return topLevelMetrics + keyResultMetrics
+  }
+
   return (
     <div style={{ paddingLeft }}>
       <Card 
@@ -90,6 +96,22 @@ function GoalItem({ goal, level, timeframe, onAddSubgoal, childGoals = [] }: Goa
               {goal.description && (
                 <p className="mt-1 text-sm text-gray-500">{goal.description}</p>
               )}
+              
+              {/* Goal Info */}
+              <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-1">
+                  <span>{goal.keyResults?.length || 0}</span>
+                  <span>Key Results</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{getTotalMetricsCount()}</span>
+                  <span>Metrics</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{goal.progress || 0}%</span>
+                  <span>Complete</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

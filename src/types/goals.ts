@@ -12,6 +12,13 @@ export interface GoalMetric {
   frequency: GoalTimeframe
 }
 
+export interface KeyResult {
+  id: string
+  description: string
+  targetDate: string
+  metrics: GoalMetric[]
+}
+
 export interface GoalMilestone {
   id: string
   title: string
@@ -39,6 +46,7 @@ export interface Goal {
   endDate: Date
   parentGoalId?: string
   metrics: GoalMetric[]
+  keyResults: KeyResult[]
   milestones: GoalMilestone[]
   assignees: string[]
   organizationId: string

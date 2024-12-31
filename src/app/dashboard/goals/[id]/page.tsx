@@ -153,15 +153,53 @@ export default function GoalDetailsPage() {
 
           {/* Metrics */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Metrics</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {goal.metrics.map((metric) => (
-                <MetricCard key={metric.id} metric={metric} />
+            <h2 className="text-lg font-semibold text-gray-900">Key Results</h2>
+            <div className="space-y-4">
+              {goal.keyResults?.map((kr) => (
+                <Card key={kr.id} className="p-4 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-medium">{kr.description}</h3>
+                      <p className="text-sm text-gray-500">
+                        Due: {new Date(kr.targetDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Metrics for this Key Result */}
+                  {kr.metrics && kr.metrics.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Success Metrics:</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {kr.metrics.map((metric) => (
+                          <MetricCard key={metric.id} metric={metric} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
               ))}
+              {(!goal.keyResults || goal.keyResults.length === 0) && (
+                <Card className="p-4">
+                  <p className="text-sm text-gray-500">No key results defined for this goal.</p>
+                </Card>
+              )}
             </div>
           </div>
 
-          {/* Key Results or Milestones */}
+          {/* Overall Goal Metrics */}
+          {goal.metrics && goal.metrics.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">Goal Metrics</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {goal.metrics.map((metric) => (
+                  <MetricCard key={metric.id} metric={metric} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Milestones */}
           {goal.milestones.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">Milestones</h2>

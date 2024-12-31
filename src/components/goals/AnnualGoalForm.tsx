@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/use-toast'
-import { CalendarIcon, InfoIcon, XCircle } from 'lucide-react'
+import { CalendarIcon, InfoIcon, XCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe } from '@/types/goals'
 import { createGoal } from '@/services/goalService'
+import { enhanceGoal } from '@/services/openaiService'
 import { format } from 'date-fns'
 
 interface KeyResultWithMetrics {
@@ -38,6 +39,7 @@ export function AnnualGoalForm() {
     targetDate: '',
     metrics: []
   }])
+  const [isEnhancing, setIsEnhancing] = useState(false)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -102,6 +104,15 @@ export function AnnualGoalForm() {
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
         metrics: metrics.map((m, i) => ({ ...m, id: `new-metric-${i}` })) as GoalMetric[],
+        keyResults: keyResults.map((kr, i) => ({
+          id: `new-kr-${i}`,
+          description: kr.description,
+          targetDate: kr.targetDate,
+          metrics: kr.metrics.map((m, j) => ({
+            ...m,
+            id: `new-kr-${i}-metric-${j}`
+          }))
+        })),
         milestones: [],
         assignees: [],
         organizationId: user.organizationId,
@@ -169,22 +180,84 @@ export function AnnualGoalForm() {
     setKeyResults(newKeyResults)
   }
 
+  const handleEnhanceWithAI = async () => {
+    if (!formData.title) {
+      toast({
+        title: "Missing information",
+        description: "Please enter a goal title first.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setIsEnhancing(true)
+      const suggestions = await enhanceGoal(
+        formData.title,
+        formData.description,
+        'Annual (2025)'
+      )
+
+      // Update form with enhanced content
+      setFormData(prev => ({
+        ...prev,
+        title: suggestions.enhancedTitle,
+        description: suggestions.enhancedDescription
+      }))
+
+      // Update key results with suggestions, adding current: 0 to each metric
+      setKeyResults(suggestions.keyResults.map(kr => ({
+        ...kr,
+        metrics: kr.metrics.map(metric => ({
+          ...metric,
+          current: 0 // Initialize current value to 0
+        }))
+      })))
+
+      toast({
+        title: "Goal Enhanced",
+        description: "Your goal has been enhanced with AI suggestions.",
+      })
+    } catch (error) {
+      console.error('Error enhancing goal:', error)
+      toast({
+        title: "Enhancement failed",
+        description: "Failed to enhance goal with AI. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Strategic Context */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Label className="text-lg font-semibold">Strategic Context</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <InfoIcon className="h-4 w-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">Annual goals should align with company strategy and provide clear direction for quarterly and monthly objectives.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center space-x-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <InfoIcon className="h-4 w-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">Annual goals should align with company strategy and provide clear direction for quarterly and monthly objectives.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEnhanceWithAI}
+              disabled={isEnhancing}
+              className="flex items-center space-x-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
+            </Button>
+          </div>
         </div>
 
         <div>
@@ -262,63 +335,93 @@ export function AnnualGoalForm() {
                 </div>
 
                 {/* Metrics for this Key Result */}
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Label>Success Metrics</Label>
                   {kr.metrics.map((metric, metricIndex) => (
-                    <div key={metricIndex} className="flex gap-4 items-start">
-                      <div className="flex-1 space-y-2">
-                        <Input
-                          value={metric.name}
-                          onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
-                          placeholder="e.g., ARR Growth Rate"
-                        />
-                        <div className="flex gap-2">
-                          <Input
-                            type="text"
-                            inputMode="numeric"
-                            value={metric.target || ''}
-                            onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', e.target.value)}
-                            placeholder="Target"
-                            className="w-24"
-                          />
-                          <Input
-                            type="text"
-                            value={metric.unit}
-                            onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
-                            placeholder="Unit"
-                            className="w-20"
-                          />
-                          <Select
-                            value={metric.frequency}
-                            onValueChange={(value) => handleKeyResultMetricChange(krIndex, metricIndex, 'frequency', value)}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue placeholder="Frequency" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="monthly">Monthly</SelectItem>
-                              <SelectItem value="quarterly">Quarterly</SelectItem>
-                            </SelectContent>
-                          </Select>
+                    <div key={metricIndex} className="p-4 bg-gray-50 rounded-lg space-y-4">
+                      <div className="flex gap-4 items-start">
+                        <div className="flex-1 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label>Metric Name</Label>
+                              <Input
+                                value={metric.name}
+                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
+                                placeholder="e.g., ARR Growth Rate"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label>Unit</Label>
+                              <Input
+                                type="text"
+                                value={metric.unit}
+                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
+                                placeholder="e.g., %"
+                                className="mt-1"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label>Target Value</Label>
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={metric.target || ''}
+                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', e.target.value)}
+                                placeholder="0"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label>Current Value</Label>
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={metric.current || ''}
+                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'current', e.target.value)}
+                                placeholder="0"
+                                className="mt-1"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label>Tracking Frequency</Label>
+                            <Select
+                              value={metric.frequency}
+                              onValueChange={(value) => handleKeyResultMetricChange(krIndex, metricIndex, 'frequency', value)}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Quarterly" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="quarterly">Quarterly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleDeleteKeyResultMetric(krIndex, metricIndex)}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => handleDeleteKeyResultMetric(krIndex, metricIndex)}
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAddKeyResultMetric(krIndex)}
-                  >
-                    Add Metric
-                  </Button>
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAddKeyResultMetric(krIndex)}
+                    >
+                      Add Metric
+                    </Button>
+                  </div>
                 </div>
               </div>
               
@@ -344,100 +447,6 @@ export function AnnualGoalForm() {
             Add Key Result
           </Button>
         )}
-      </div>
-
-      {/* Metrics */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Success Metrics</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <InfoIcon className="h-4 w-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">Define 1-3 key metrics that will be tracked to measure progress.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div className="space-y-4">
-          {metrics.map((metric, index) => (
-            <Card key={index} className="p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Metric Name</Label>
-                  <Input
-                    placeholder="e.g., ARR Growth Rate"
-                    value={metric.name}
-                    onChange={(e) => handleMetricChange(index, 'name', e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Unit</Label>
-                  <Input
-                    placeholder="e.g., %"
-                    value={metric.unit}
-                    onChange={(e) => handleMetricChange(index, 'unit', e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Target Value</Label>
-                  <Input
-                    type="number"
-                    placeholder="e.g., 30"
-                    value={metric.target}
-                    onChange={(e) => handleMetricChange(index, 'target', parseFloat(e.target.value))}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Current Value</Label>
-                  <Input
-                    type="number"
-                    placeholder="e.g., 0"
-                    value={metric.current}
-                    onChange={(e) => handleMetricChange(index, 'current', parseFloat(e.target.value))}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <Label>Tracking Frequency</Label>
-                  <Select
-                    value={metric.frequency as string}
-                    onValueChange={(value) => handleMetricChange(index, 'frequency', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
-          ))}
-
-          {metrics.length < 3 && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleAddMetric}
-              className="w-full"
-            >
-              Add Metric
-            </Button>
-          )}
-        </div>
       </div>
 
       <div className="flex justify-end space-x-2">

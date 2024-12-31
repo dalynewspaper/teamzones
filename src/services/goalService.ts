@@ -15,12 +15,12 @@ export async function createGoal(goal: Omit<Goal, 'id' | 'createdAt' | 'updatedA
   return docRef.id;
 }
 
-export async function updateGoal(goalId: string, updates: Partial<Goal>): Promise<void> {
-  const goalRef = doc(db, 'goals', goalId);
+export async function updateGoal(goalId: string, goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId)
   await updateDoc(goalRef, {
-    ...updates,
+    ...goalData,
     updatedAt: new Date()
-  });
+  })
 }
 
 export async function deleteGoal(goalId: string): Promise<void> {
@@ -129,4 +129,53 @@ export async function getGoalById(goalId: string): Promise<Goal | null> {
     console.error('Error fetching goal:', error)
     throw error
   }
+}
+
+export async function updateGoalProgress(goalId: string, progress: number): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId)
+  await updateDoc(goalRef, {
+    progress,
+    updatedAt: new Date()
+  })
+}
+
+export async function updateGoalMetrics(goalId: string, metricId: string, updates: Partial<Goal['metrics'][0]>): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId)
+  const goalDoc = await getDoc(goalRef)
+  const goal = goalDoc.data() as Goal
+
+  const updatedMetrics = goal.metrics.map(metric => 
+    metric.id === metricId ? { ...metric, ...updates } : metric
+  )
+
+  await updateDoc(goalRef, {
+    metrics: updatedMetrics,
+    updatedAt: new Date()
+  })
+}
+
+export async function updateKeyResultMetric(
+  goalId: string, 
+  keyResultId: string, 
+  metricId: string, 
+  updates: Partial<Goal['metrics'][0]>
+): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId)
+  const goalDoc = await getDoc(goalRef)
+  const goal = goalDoc.data() as Goal
+
+  const updatedKeyResults = goal.keyResults.map(kr => {
+    if (kr.id === keyResultId) {
+      const updatedMetrics = kr.metrics.map(metric =>
+        metric.id === metricId ? { ...metric, ...updates } : metric
+      )
+      return { ...kr, metrics: updatedMetrics }
+    }
+    return kr
+  })
+
+  await updateDoc(goalRef, {
+    keyResults: updatedKeyResults,
+    updatedAt: new Date()
+  })
 } 

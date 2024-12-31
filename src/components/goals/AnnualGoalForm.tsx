@@ -12,14 +12,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe } from '@/types/goals'
-import { createGoal } from '@/services/goalService'
+import { createGoal, updateGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format } from 'date-fns'
 
 interface KeyResultWithMetrics {
+  id?: string
   description: string
   targetDate: string
   metrics: {
+    id?: string
     name: string
     target: number
     current: number
@@ -28,26 +30,45 @@ interface KeyResultWithMetrics {
   }[]
 }
 
-export function AnnualGoalForm() {
+interface AnnualGoalFormProps {
+  initialData?: Goal
+  mode?: 'create' | 'edit'
+}
+
+export function AnnualGoalForm({ initialData, mode = 'create' }: AnnualGoalFormProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>([])
-  const [keyResults, setKeyResults] = useState<KeyResultWithMetrics[]>([{
-    description: '',
-    targetDate: '',
-    metrics: []
-  }])
+  const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
+  const [keyResults, setKeyResults] = useState<KeyResultWithMetrics[]>(
+    initialData?.keyResults?.map(kr => ({
+      id: kr.id,
+      description: kr.description,
+      targetDate: kr.targetDate,
+      metrics: kr.metrics.map(m => ({
+        id: m.id,
+        name: m.name,
+        target: m.target,
+        current: m.current,
+        unit: m.unit,
+        frequency: m.frequency as 'monthly' | 'quarterly'
+      }))
+    })) || [{
+      description: '',
+      targetDate: '',
+      metrics: []
+    }]
+  )
   const [isEnhancing, setIsEnhancing] = useState(false)
 
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    type: 'company' as GoalType,
-    priority: 'high' as GoalPriority,
-    startDate: new Date(2025, 0, 1).toISOString().split('T')[0],
-    endDate: new Date(2025, 11, 31).toISOString().split('T')[0],
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    type: initialData?.type || 'company' as GoalType,
+    priority: initialData?.priority || 'high' as GoalPriority,
+    startDate: initialData?.startDate.toISOString().split('T')[0] || new Date(2025, 0, 1).toISOString().split('T')[0],
+    endDate: initialData?.endDate.toISOString().split('T')[0] || new Date(2025, 11, 31).toISOString().split('T')[0],
   })
 
   const handleInputChange = (field: string, value: any) => {
@@ -93,45 +114,57 @@ export function AnnualGoalForm() {
     try {
       setIsSubmitting(true)
 
-      const newGoal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
+      const goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
         title: formData.title,
         description: formData.description,
         type: formData.type,
         timeframe: 'annual',
         priority: formData.priority,
-        status: 'not_started',
-        progress: 0,
+        status: initialData?.status || 'not_started',
+        progress: initialData?.progress || 0,
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
-        metrics: metrics.map((m, i) => ({ ...m, id: `new-metric-${i}` })) as GoalMetric[],
+        metrics: metrics.map((m, i) => ({ 
+          ...m, 
+          id: m.id || `new-metric-${i}` 
+        })) as GoalMetric[],
         keyResults: keyResults.map((kr, i) => ({
-          id: `new-kr-${i}`,
+          id: kr.id || `new-kr-${i}`,
           description: kr.description,
           targetDate: kr.targetDate,
           metrics: kr.metrics.map((m, j) => ({
             ...m,
-            id: `new-kr-${i}-metric-${j}`
+            id: m.id || `new-kr-${i}-metric-${j}`
           }))
         })),
-        milestones: [],
-        assignees: [],
+        milestones: initialData?.milestones || [],
+        assignees: initialData?.assignees || [],
         organizationId: user.organizationId,
-        ownerId: user.uid,
-        createdBy: user.uid,
-        tags: []
+        ownerId: initialData?.ownerId || user.uid,
+        createdBy: initialData?.createdBy || user.uid,
+        tags: initialData?.tags || []
       }
 
-      await createGoal(newGoal)
-      toast({
-        title: 'Goal created',
-        description: 'Your new goal has been created successfully.'
-      })
+      if (mode === 'edit' && initialData) {
+        await updateGoal(initialData.id, goalData)
+        toast({
+          title: 'Goal updated',
+          description: 'Your goal has been updated successfully.'
+        })
+      } else {
+        await createGoal(goalData)
+        toast({
+          title: 'Goal created',
+          description: 'Your new goal has been created successfully.'
+        })
+      }
+      
       router.push('/dashboard/goals')
     } catch (error) {
-      console.error('Error creating goal:', error)
+      console.error('Error saving goal:', error)
       toast({
         title: 'Error',
-        description: 'Failed to create goal. Please try again.',
+        description: `Failed to ${mode === 'edit' ? 'update' : 'create'} goal. Please try again.`,
         variant: 'destructive'
       })
     } finally {
@@ -278,6 +311,42 @@ export function AnnualGoalForm() {
             placeholder="Describe how this goal aligns with company strategy and its expected impact"
             className="mt-1"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Goal Type</Label>
+            <Select
+              value={formData.type}
+              onValueChange={(value: GoalType) => handleInputChange('type', value)}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select goal type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="company">Company Goal</SelectItem>
+                <SelectItem value="department">Department Goal</SelectItem>
+                <SelectItem value="team">Team Goal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Priority Level</Label>
+            <Select
+              value={formData.priority}
+              onValueChange={(value: GoalPriority) => handleInputChange('priority', value)}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High Priority</SelectItem>
+                <SelectItem value="medium">Medium Priority</SelectItem>
+                <SelectItem value="low">Low Priority</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div>
@@ -452,7 +521,7 @@ export function AnnualGoalForm() {
       <div className="flex justify-end space-x-2">
         <Button
           variant="outline"
-          onClick={() => router.push('/dashboard/goals')}
+          onClick={() => router.push(mode === 'edit' ? `/dashboard/goals/${initialData?.id}` : '/dashboard/goals')}
         >
           Cancel
         </Button>
@@ -460,7 +529,7 @@ export function AnnualGoalForm() {
           onClick={handleSubmit}
           disabled={isSubmitting || !formData.title}
         >
-          {isSubmitting ? 'Creating...' : 'Create Goal'}
+          {isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Creating...') : (mode === 'edit' ? 'Update Goal' : 'Create Goal')}
         </Button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Goal, GoalType } from '@/types/goals';
+import { Goal, GoalType, GoalTimeframe } from '@/types/goals';
 import { createGoal } from '@/services/goalService';
 import {
   Dialog,
@@ -25,7 +25,7 @@ import { format, endOfWeek } from 'date-fns';
 interface CreateGoalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onGoalCreated: (goal: Goal) => void;
+  onGoalCreated: (goalId: string) => void;
   selectedWeek: Date;
 }
 
@@ -42,7 +42,7 @@ export function CreateGoalDialog({
     title: '',
     description: '',
     deadline: format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-    type: 'Weekly' as GoalType,
+    type: 'team' as GoalType,
   });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -51,11 +51,22 @@ export function CreateGoalDialog({
 
     try {
       setIsSubmitting(true);
-      const newGoal = await createGoal({
+      const goalId = await createGoal({
         ...formData,
-        status: 'To Do',
-        ownerId: user.uid,
+        timeframe: 'weekly' as GoalTimeframe,
+        priority: 'medium',
+        status: 'not_started',
+        progress: 0,
+        startDate: selectedWeek,
+        endDate: endOfWeek(selectedWeek, { weekStartsOn: 1 }),
+        metrics: [],
+        keyResults: [],
+        milestones: [],
+        assignees: [],
         organizationId: user.organizationId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        tags: []
       });
 
       toast({
@@ -63,13 +74,13 @@ export function CreateGoalDialog({
         description: 'Your new goal has been created successfully.',
       });
 
-      onGoalCreated(newGoal);
+      onGoalCreated(goalId);
       onOpenChange(false);
       setFormData({
         title: '',
         description: '',
         deadline: format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        type: 'Weekly',
+        type: 'team',
       });
     } catch (error) {
       console.error('Error creating goal:', error);

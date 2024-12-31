@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Goal, GoalTimeframe, GoalType, GoalMetric } from '@/types/goals'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,7 +36,13 @@ function MetricDisplay({ metric }: { metric: GoalMetric }) {
 
 function GoalItem({ goal, level, timeframe, onAddSubgoal, childGoals = [] }: GoalItemProps) {
   const [isExpanded, setIsExpanded] = useState(true)
+  const router = useRouter()
   const paddingLeft = `${level * 2}rem`
+
+  const handleGoalClick = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent expansion toggle
+    router.push(`/dashboard/goals/${goal.id}`)
+  }
 
   const getStatusIcon = () => {
     switch (goal.status) {
@@ -49,123 +56,47 @@ function GoalItem({ goal, level, timeframe, onAddSubgoal, childGoals = [] }: Goa
   }
 
   return (
-    <div>
-      <Card className="mb-2">
+    <div style={{ paddingLeft }}>
+      <Card 
+        className="mb-4 hover:shadow-md transition-shadow cursor-pointer"
+        onClick={handleGoalClick}
+      >
         <div className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2" style={{ paddingLeft }}>
-              {childGoals.length > 0 && (
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-1 hover:bg-gray-100 rounded"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </button>
-              )}
-              {getStatusIcon()}
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium">{goal.title}</h3>
-                  {goal.priority === 'high' && (
-                    <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded">
-                      High Priority
-                    </span>
-                  )}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                {childGoals.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-0 h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsExpanded(!isExpanded)
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+                <div className="flex items-center space-x-2">
+                  {getStatusIcon()}
+                  <h3 className="font-medium text-gray-900">{goal.title}</h3>
                 </div>
-                <p className="text-sm text-gray-500">{goal.description}</p>
-                {timeframe !== 'weekly' && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    {goal.type.charAt(0).toUpperCase() + goal.type.slice(1)} Goal
-                  </div>
-                )}
               </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-500">
-                Progress: {goal.progress}%
-              </div>
-              {onAddSubgoal && timeframe !== 'weekly' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onAddSubgoal(goal.id)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+              {goal.description && (
+                <p className="mt-1 text-sm text-gray-500">{goal.description}</p>
               )}
             </div>
           </div>
-
-          {/* Progress bar */}
-          <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${
-                goal.status === 'at_risk' ? 'bg-red-500' : 'bg-blue-600'
-              }`}
-              style={{ width: `${goal.progress}%` }}
-            />
-          </div>
-
-          {/* Metrics */}
-          {goal.metrics.length > 0 && (
-            <div className="mt-4 flex gap-4">
-              {goal.metrics
-                .filter(m => m.frequency === timeframe)
-                .map((metric) => (
-                  <MetricDisplay key={metric.id} metric={metric} />
-                ))}
-            </div>
-          )}
-
-          {/* Additional details based on timeframe */}
-          {timeframe !== 'weekly' && goal.milestones.length > 0 && (
-            <div className="mt-4 border-t pt-4">
-              <h4 className="text-sm font-medium mb-2">Key Milestones</h4>
-              <div className="space-y-2">
-                {goal.milestones.map((milestone) => (
-                  <div key={milestone.id} className="flex items-center gap-2 text-sm">
-                    <div className={`w-2 h-2 rounded-full ${
-                      milestone.status === 'completed' ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                    <span>{milestone.description}</span>
-                    <span className="text-gray-400">
-                      ({new Date(milestone.dueDate).toLocaleDateString()})
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Weekly specific details */}
-          {timeframe === 'weekly' && goal.lastCheckin && (
-            <div className="mt-4 border-t pt-4">
-              <h4 className="text-sm font-medium mb-2">Last Check-in</h4>
-              <div className="text-sm text-gray-600">
-                <p>Status: {goal.lastCheckin.status}</p>
-                {goal.lastCheckin.blockers && goal.lastCheckin.blockers.length > 0 && (
-                  <div className="mt-2">
-                    <p className="font-medium">Blockers:</p>
-                    <ul className="list-disc list-inside">
-                      {goal.lastCheckin.blockers.map((blocker, i) => (
-                        <li key={i}>{blocker}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </Card>
 
-      {/* Child goals */}
       {isExpanded && childGoals.length > 0 && (
-        <div className="ml-4">
+        <div className="space-y-4">
           {childGoals.map((childGoal) => (
             <GoalItem
               key={childGoal.id}

@@ -8,7 +8,7 @@ import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock,
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { VideoRecordingInterface } from '@/components/video/VideoRecordingInterface'
 import VideoPageClient from '@/components/video/VideoPageClient'
 import { storage, db } from '@/lib/firebase'
@@ -48,6 +48,7 @@ export function Dashboard({ children }: DashboardProps) {
   const { currentWeek } = useWeek()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const videoId = searchParams.get('video')
   const [isRecording, setIsRecording] = useState(false)
   const [filter, setFilter] = useState('all')
@@ -327,9 +328,9 @@ export function Dashboard({ children }: DashboardProps) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <div className="w-64 border-r bg-white flex flex-col">
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar - fixed */}
+      <div className="w-64 border-r bg-white flex flex-col h-screen flex-shrink-0">
         {/* Logo */}
         <div className="h-16 flex items-center px-4 border-b border-gray-200">
           <Link href="/" className="text-xl font-semibold text-[#4263EB]">
@@ -416,10 +417,10 @@ export function Dashboard({ children }: DashboardProps) {
         />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Header */}
-        <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-6">
+      {/* Main content area - scrollable */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Top navbar - fixed */}
+        <div className="h-16 border-b bg-white flex items-center justify-between px-6 flex-shrink-0">
           <div className="flex items-center flex-1 space-x-4">
             <div className="relative w-96">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -438,131 +439,140 @@ export function Dashboard({ children }: DashboardProps) {
           >
             <Video className="mr-2 h-4 w-4" /> Record Update
           </Button>
-        </header>
+        </div>
 
-        {/* Main Area */}
-        {children || (
-          <div className="flex-1 overflow-auto bg-gray-50 py-12 px-6">
-            <div className="max-w-7xl mx-auto space-y-8">
+        {/* Week navigator bar - only show on home screen */}
+        {pathname === '/dashboard' && (
+          <div className="h-[88px] border-b bg-white flex items-center px-6 flex-shrink-0">
+            <div className="max-w-7xl w-full mx-auto">
               <WeekNavigator />
-
-              {error ? (
-                <div className="rounded-md bg-red-50 p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <XCircle className="h-5 w-5 text-red-400" />
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">Error loading updates</h3>
-                      <div className="mt-2 text-sm text-red-700">
-                        <p>{error}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Filters */}
-                  <div className="flex space-x-2 mb-6">
-                    <Button
-                      variant={filter === 'all' ? 'default' : 'ghost'}
-                      onClick={() => setFilter('all')}
-                      className={filter === 'all' ? 'bg-[#4263EB]' : ''}
-                      size="sm"
-                    >
-                      All Updates
-                    </Button>
-                    <Button
-                      variant={filter === 'starred' ? 'default' : 'ghost'}
-                      onClick={() => setFilter('starred')}
-                      className={filter === 'starred' ? 'bg-[#4263EB]' : ''}
-                      size="sm"
-                    >
-                      <Star className="mr-2 h-3 w-3" /> Starred
-                    </Button>
-                    <Button
-                      variant={filter === 'inbox' ? 'default' : 'ghost'}
-                      onClick={() => setFilter('inbox')}
-                      className={filter === 'inbox' ? 'bg-[#4263EB]' : ''}
-                      size="sm"
-                    >
-                      <Inbox className="mr-2 h-3 w-3" /> Inbox
-                    </Button>
-                  </div>
-
-                  {/* Loading State */}
-                  {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#4263EB]"></div>
-                    </div>
-                  ) : (
-                    /* Updates Grid */
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {updates.length === 0 ? (
-                        <div className="col-span-full">
-                          <EmptyState weekId={currentWeek?.id || ''} />
-                        </div>
-                      ) : (
-                        updates.map((update) => (
-                          <div
-                            key={update.id}
-                            className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
-                            onClick={() => router.push(`/dashboard?video=${update.id}`)}
-                          >
-                            <div className="relative aspect-video">
-                              <Image
-                                src={update.thumbnail || placeholderImage}
-                                alt={update.title}
-                                fill
-                                className="rounded-t-lg object-cover"
-                                unoptimized={true}
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.src = placeholderImage;
-                                }}
-                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                              />
-                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="bg-white/90 hover:bg-white"
-                                  onClick={(e) => {
-                                    e.stopPropagation() // Prevent navigation when clicking the button
-                                    window.open(update.url, '_blank')
-                                  }}
-                                >
-                                  Watch Now
-                                </Button>
-                              </div>
-                              <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                                {update.duration}
-                              </div>
-                            </div>
-                            <div className="p-4">
-                              <div className="flex justify-between items-start">
-                                <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
-                                  {update.title}
-                                </h3>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                                <span>{update.timestamp}</span>
-                                <span>{update.views} views</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
         )}
+        
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto bg-gray-50">
+          {children || (
+            <div className="h-full">
+              <div className="max-w-7xl w-full mx-auto py-12 px-6">
+                {error ? (
+                  <div className="rounded-md bg-red-50 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <XCircle className="h-5 w-5 text-red-400" />
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">Error loading updates</h3>
+                        <div className="mt-2 text-sm text-red-700">
+                          <p>{error}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Filters */}
+                    <div className="flex space-x-2 mb-6">
+                      <Button
+                        variant={filter === 'all' ? 'default' : 'ghost'}
+                        onClick={() => setFilter('all')}
+                        className={filter === 'all' ? 'bg-[#4263EB]' : ''}
+                        size="sm"
+                      >
+                        All Updates
+                      </Button>
+                      <Button
+                        variant={filter === 'starred' ? 'default' : 'ghost'}
+                        onClick={() => setFilter('starred')}
+                        className={filter === 'starred' ? 'bg-[#4263EB]' : ''}
+                        size="sm"
+                      >
+                        <Star className="mr-2 h-3 w-3" /> Starred
+                      </Button>
+                      <Button
+                        variant={filter === 'inbox' ? 'default' : 'ghost'}
+                        onClick={() => setFilter('inbox')}
+                        className={filter === 'inbox' ? 'bg-[#4263EB]' : ''}
+                        size="sm"
+                      >
+                        <Inbox className="mr-2 h-3 w-3" /> Inbox
+                      </Button>
+                    </div>
+
+                    {/* Loading State */}
+                    {isLoading ? (
+                      <div className="flex items-center justify-center h-64">
+                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#4263EB]"></div>
+                      </div>
+                    ) : (
+                      /* Updates Grid */
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {updates.length === 0 ? (
+                          <div className="col-span-full">
+                            <EmptyState weekId={currentWeek?.id || ''} />
+                          </div>
+                        ) : (
+                          updates.map((update) => (
+                            <div
+                              key={update.id}
+                              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer"
+                              onClick={() => router.push(`/dashboard?video=${update.id}`)}
+                            >
+                              <div className="relative aspect-video">
+                                <Image
+                                  src={update.thumbnail || placeholderImage}
+                                  alt={update.title}
+                                  fill
+                                  className="rounded-t-lg object-cover"
+                                  unoptimized={true}
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.src = placeholderImage;
+                                  }}
+                                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                />
+                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="bg-white/90 hover:bg-white"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      window.open(update.url, '_blank')
+                                    }}
+                                  >
+                                    Watch Now
+                                  </Button>
+                                </div>
+                                <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                                  {update.duration}
+                                </div>
+                              </div>
+                              <div className="p-4">
+                                <div className="flex justify-between items-start">
+                                  <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[#4263EB] transition-colors">
+                                    {update.title}
+                                  </h3>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                                  <span>{update.timestamp}</span>
+                                  <span>{update.views} views</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Recording Dialog */}

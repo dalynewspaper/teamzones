@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/use-toast'
-import { CalendarIcon, InfoIcon } from 'lucide-react'
+import { CalendarIcon, InfoIcon, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe } from '@/types/goals'
 import { createGoal } from '@/services/goalService'
+import { format } from 'date-fns'
 
 interface KeyResultWithMetrics {
   description: string
@@ -63,8 +64,15 @@ export function AnnualGoalForm() {
 
   const handleMetricChange = (index: number, field: keyof GoalMetric, value: any) => {
     const newMetrics = [...metrics]
+    if (field === 'target' || field === 'current') {
+      value = value === '' ? 0 : Number(value)
+    }
     newMetrics[index] = { ...newMetrics[index], [field]: value }
     setMetrics(newMetrics)
+  }
+
+  const handleDeleteMetric = (index: number) => {
+    setMetrics(metrics.filter((_, i) => i !== index))
   }
 
   const handleAddMetric = () => {
@@ -127,6 +135,40 @@ export function AnnualGoalForm() {
     { label: 'Q4', date: new Date(2025, 11, 31) }
   ]
 
+  const handleDeleteKeyResult = (index: number) => {
+    setKeyResults(keyResults.filter((_, i) => i !== index))
+  }
+
+  const handleKeyResultMetricChange = (keyResultIndex: number, metricIndex: number, field: string, value: any) => {
+    const newKeyResults = [...keyResults]
+    if (field === 'target' || field === 'current') {
+      value = value === '' ? 0 : Number(value)
+    }
+    newKeyResults[keyResultIndex].metrics[metricIndex] = {
+      ...newKeyResults[keyResultIndex].metrics[metricIndex],
+      [field]: value
+    }
+    setKeyResults(newKeyResults)
+  }
+
+  const handleAddKeyResultMetric = (keyResultIndex: number) => {
+    const newKeyResults = [...keyResults]
+    newKeyResults[keyResultIndex].metrics.push({
+      name: '',
+      target: 0,
+      current: 0,
+      unit: '',
+      frequency: 'quarterly'
+    })
+    setKeyResults(newKeyResults)
+  }
+
+  const handleDeleteKeyResultMetric = (keyResultIndex: number, metricIndex: number) => {
+    const newKeyResults = [...keyResults]
+    newKeyResults[keyResultIndex].metrics = newKeyResults[keyResultIndex].metrics.filter((_, i) => i !== metricIndex)
+    setKeyResults(newKeyResults)
+  }
+
   return (
     <div className="space-y-8">
       {/* Strategic Context */}
@@ -185,29 +227,16 @@ export function AnnualGoalForm() {
 
       {/* Key Results */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Key Results (OKRs)</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <InfoIcon className="h-4 w-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">Define 2-5 measurable outcomes that will determine success.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div className="space-y-4">
-          {keyResults.map((kr, index) => (
-            <Card key={index} className="p-4">
-              <div className="space-y-4">
+        <Label className="text-lg font-semibold">Key Results (OKRs)</Label>
+        {keyResults.map((kr, krIndex) => (
+          <Card key={krIndex} className="p-4 space-y-4">
+            <div className="flex justify-between items-start">
+              <div className="flex-1 space-y-4">
                 <div>
-                  <Label>Key Result {index + 1}</Label>
+                  <Label>Key Result {krIndex + 1}</Label>
                   <Input
                     value={kr.description}
-                    onChange={(e) => handleKeyResultChange(index, 'description', e.target.value)}
+                    onChange={(e) => handleKeyResultChange(krIndex, 'description', e.target.value)}
                     placeholder="e.g., Achieve $10M ARR by Q4"
                     className="mt-1"
                   />
@@ -217,7 +246,7 @@ export function AnnualGoalForm() {
                   <Label>Target Date</Label>
                   <Select
                     value={kr.targetDate}
-                    onValueChange={(value) => handleKeyResultChange(index, 'targetDate', value)}
+                    onValueChange={(value) => handleKeyResultChange(krIndex, 'targetDate', value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select quarter" />
@@ -225,27 +254,96 @@ export function AnnualGoalForm() {
                     <SelectContent>
                       {quarters.map((q) => (
                         <SelectItem key={q.label} value={q.date.toISOString()}>
-                          {q.label} ({q.date.toLocaleDateString()})
+                          {q.label} (Due {format(q.date, 'MM/dd/yyyy')})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
-          ))}
 
-          {keyResults.length < 5 && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleAddKeyResult}
-              className="w-full"
-            >
-              Add Key Result
-            </Button>
-          )}
-        </div>
+                {/* Metrics for this Key Result */}
+                <div className="space-y-4">
+                  <Label>Success Metrics</Label>
+                  {kr.metrics.map((metric, metricIndex) => (
+                    <div key={metricIndex} className="flex gap-4 items-start">
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          value={metric.name}
+                          onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
+                          placeholder="e.g., ARR Growth Rate"
+                        />
+                        <div className="flex gap-2">
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={metric.target || ''}
+                            onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', e.target.value)}
+                            placeholder="Target"
+                            className="w-24"
+                          />
+                          <Input
+                            type="text"
+                            value={metric.unit}
+                            onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
+                            placeholder="Unit"
+                            className="w-20"
+                          />
+                          <Select
+                            value={metric.frequency}
+                            onValueChange={(value) => handleKeyResultMetricChange(krIndex, metricIndex, 'frequency', value)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="quarterly">Quarterly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleDeleteKeyResultMetric(krIndex, metricIndex)}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddKeyResultMetric(krIndex)}
+                  >
+                    Add Metric
+                  </Button>
+                </div>
+              </div>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => handleDeleteKeyResult(krIndex)}
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          </Card>
+        ))}
+
+        {keyResults.length < 5 && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleAddKeyResult}
+            className="w-full"
+          >
+            Add Key Result
+          </Button>
+        )}
       </div>
 
       {/* Metrics */}

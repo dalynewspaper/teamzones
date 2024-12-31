@@ -105,4 +105,28 @@ export async function getDepartmentGoals(departmentId: string): Promise<Goal[]> 
   
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+}
+
+export async function getGoalById(goalId: string): Promise<Goal | null> {
+  try {
+    const goalRef = doc(db, 'goals', goalId)
+    const goalSnap = await getDoc(goalRef)
+    
+    if (!goalSnap.exists()) {
+      return null
+    }
+
+    const goalData = goalSnap.data()
+    return {
+      id: goalSnap.id,
+      ...goalData,
+      startDate: goalData.startDate?.toDate() || new Date(),
+      endDate: goalData.endDate?.toDate() || new Date(),
+      createdAt: goalData.createdAt?.toDate() || new Date(),
+      updatedAt: goalData.updatedAt?.toDate() || null,
+    } as Goal
+  } catch (error) {
+    console.error('Error fetching goal:', error)
+    throw error
+  }
 } 

@@ -14,43 +14,50 @@ export function WeekNavigator() {
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            onClick={() => navigateWeek('prev')}
-            variant="ghost"
-            size="sm"
-            className="hover:bg-gray-100 rounded-full p-2 h-auto"
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </Button>
-          <div>
-            <h2 className="text-lg font-semibold">
-              CW {currentWeek.weekNumber}, {currentWeek.year}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {formatDate(currentWeek.startDate)} - {formatDate(currentWeek.endDate)}
-            </p>
-          </div>
-          <Button
-            onClick={() => navigateWeek('next')}
-            variant="ghost"
-            size="sm"
-            className="hover:bg-gray-100 rounded-full p-2 h-auto"
-          >
-            <ChevronRightIcon className="h-5 w-5" />
-          </Button>
+    <div className="flex items-center justify-between w-full">
+      <div className="flex items-center space-x-2">
+        <Button
+          onClick={() => navigateWeek('prev')}
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+
+        <div className="flex flex-col">
+          <h2 className="text-base font-medium">
+            CW {currentWeek.weekNumber}, {currentWeek.year}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {formatDate(currentWeek.startDate)} - {formatDate(currentWeek.endDate)}
+          </p>
         </div>
-        
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            Weekly Report
-          </Button>
-          <Button size="sm" className="bg-notion-blue hover:bg-notion-blue-dark text-white">
-            Set Weekly Goals
-          </Button>
-        </div>
+
+        <Button
+          onClick={() => navigateWeek('next')}
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      <div className="flex items-center space-x-2">
+        <Button 
+          variant="outline" 
+          size="sm"
+          className="h-9"
+        >
+          Weekly Report
+        </Button>
+        <Button 
+          size="sm"
+          className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white h-9"
+        >
+          Set Weekly Goals
+        </Button>
       </div>
     </div>
   )

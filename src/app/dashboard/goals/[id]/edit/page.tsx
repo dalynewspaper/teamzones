@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { AnnualGoalForm } from '@/components/goals'
+import { AnnualGoalForm, QuarterlyGoalForm } from '@/components/goals'
 import { Card } from '@/components/ui/card'
 import { Dashboard } from '@/components/dashboard/Dashboard'
 import { getGoalById } from '@/services/goalService'
@@ -68,6 +68,11 @@ export default function EditGoalPage() {
     )
   }
 
+  // Calculate quarter and year for quarterly goals
+  const startDate = new Date(goal.startDate)
+  const quarter = Math.floor(startDate.getMonth() / 3) + 1 as 1 | 2 | 3 | 4
+  const year = startDate.getFullYear()
+
   return (
     <Dashboard>
       <div className="flex-1 overflow-auto bg-gray-50 py-12 px-6">
@@ -87,7 +92,16 @@ export default function EditGoalPage() {
           </div>
 
           <Card className="p-6">
-            <AnnualGoalForm initialData={goal} mode="edit" />
+            {goal.timeframe === 'annual' ? (
+              <AnnualGoalForm initialData={goal} mode="edit" />
+            ) : goal.timeframe === 'quarterly' ? (
+              <QuarterlyGoalForm
+                initialData={goal}
+                mode="edit"
+                quarter={quarter}
+                year={year}
+              />
+            ) : null}
           </Card>
         </div>
       </div>

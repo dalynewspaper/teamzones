@@ -13,10 +13,18 @@ interface GoalSuggestions {
   }>
 }
 
+interface ParentGoalInfo {
+  parentGoal: {
+    title: string
+    description: string
+  }
+}
+
 export async function enhanceGoal(
   title: string,
   description: string,
-  timeframe: string
+  timeframe: string,
+  parentGoalInfo?: ParentGoalInfo
 ): Promise<GoalSuggestions> {
   try {
     const response = await fetch('/api/ai/enhance-goal', {
@@ -28,6 +36,7 @@ export async function enhanceGoal(
         title,
         description,
         timeframe,
+        parentGoal: parentGoalInfo?.parentGoal
       }),
     })
 

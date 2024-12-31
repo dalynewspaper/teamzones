@@ -25,6 +25,11 @@ export default function GoalsPage() {
   const [selectedTimeframe, setSelectedTimeframe] = useState<GoalTimeframe>('annual')
   const [goals, setGoals] = useState<Goal[]>([])
 
+  // Calculate current quarter
+  const now = new Date()
+  const currentQuarter = Math.floor(now.getMonth() / 3) + 1 as 1 | 2 | 3 | 4
+  const currentYear = now.getFullYear()
+
   useEffect(() => {
     const loadGoals = async () => {
       if (!user?.organizationId) return
@@ -58,11 +63,18 @@ export default function GoalsPage() {
                 }
               </p>
             </div>
-            {selectedTimeframe === 'annual' && (
+            {selectedTimeframe === 'annual' ? (
               <Link href="/dashboard/goals/new">
                 <Button className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white">
                   <Plus className="h-4 w-4 mr-2" />
                   New Annual Goal
+                </Button>
+              </Link>
+            ) : selectedTimeframe === 'quarterly' && (
+              <Link href={`/dashboard/goals/new/quarterly?quarter=${currentQuarter}&year=${currentYear}`}>
+                <Button className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Quarterly Goal
                 </Button>
               </Link>
             )}

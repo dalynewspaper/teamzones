@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, KeyResult } from '@/types/goals'
-import { createGoal, updateGoal } from '@/services/goalService'
+import { createGoal, updateGoal, deleteGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format } from 'date-fns'
 
@@ -20,6 +20,16 @@ interface AnnualGoalFormProps {
   initialData?: Goal
   mode?: 'create' | 'edit'
   onSuccess?: () => void
+}
+
+interface AssigneeSelection {
+  userId: string
+  role: 'owner' | 'contributor' | 'reviewer'
+}
+
+interface TeamSelection {
+  teamId: string
+  role: 'primary' | 'supporting'
 }
 
 export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: AnnualGoalFormProps) {
@@ -40,6 +50,19 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
 
   const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
   const [keyResults, setKeyResults] = useState<Partial<KeyResult>[]>(initialData?.keyResults || [])
+  const [selectedAssignees, setSelectedAssignees] = useState<AssigneeSelection[]>(
+    initialData?.assignees?.map(a => ({
+      userId: a.userId,
+      role: a.role
+    })) || []
+  )
+
+  const [selectedTeams, setSelectedTeams] = useState<TeamSelection[]>(
+    initialData?.teamRoles?.map(tr => ({
+      teamId: tr.teamId,
+      role: tr.role
+    })) || []
+  )
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -141,7 +164,12 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
           })) || []
         })) as KeyResult[],
         milestones: [],
-        assignees: initialData?.assignees || [],
+        assignees: selectedAssignees.map(a => ({
+          userId: a.userId,
+          role: a.role,
+          assignedAt: new Date()
+        })),
+        teamRoles: selectedTeams,
         organizationId: user.organizationId,
         ownerId: initialData?.ownerId || user.uid,
         createdBy: initialData?.createdBy || user.uid,
@@ -274,7 +302,9 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
 
   const handleDeleteKeyResultMetric = (keyResultIndex: number, metricIndex: number) => {
     const newKeyResults = [...keyResults]
-    newKeyResults[keyResultIndex].metrics = newKeyResults[keyResultIndex].metrics.filter((_, i) => i !== metricIndex)
+    const keyResult = newKeyResults[keyResultIndex]
+    if (!keyResult?.metrics) return
+    keyResult.metrics = keyResult.metrics.filter((_, i) => i !== metricIndex)
     setKeyResults(newKeyResults)
   }
 
@@ -332,6 +362,33 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
       })
     } finally {
       setIsEnhancing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!initialData?.id || !user?.organizationId) return
+
+    try {
+      setIsSubmitting(true)
+      await deleteGoal(initialData.id)
+      toast({
+        title: 'Goal deleted',
+        description: 'Your annual goal has been deleted successfully.'
+      })
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete goal. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -577,18 +634,27 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
         ))}
       </div>
 
-      <div className="flex justify-end space-x-2">
+      <div className="flex justify-end space-x-4">
+        {mode === 'edit' && (
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isSubmitting}
+          >
+            Delete Goal
+          </Button>
+        )}
         <Button
           variant="outline"
-          onClick={() => router.push(mode === 'edit' ? `/dashboard/goals/${initialData?.id}` : '/dashboard/goals')}
+          onClick={() => router.back()}
         >
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={isSubmitting || !formData.title}
+          disabled={isSubmitting}
         >
-          {isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Creating...') : (mode === 'edit' ? 'Update Goal' : 'Create Goal')}
+          {isSubmitting ? 'Saving...' : mode === 'edit' ? 'Update Goal' : 'Create Goal'}
         </Button>
       </div>
     </div>

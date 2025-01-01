@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalMilestone, MilestoneSuggestion, MetricSuggestion } from '@/types/goals'
-import { createGoal, updateGoal, getGoalsByTimeframe } from '@/services/goalService'
+import { createGoal, updateGoal, deleteGoal, getGoalsByTimeframe } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns'
 
@@ -295,6 +295,33 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
       })
     } finally {
       setIsEnhancing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!initialData?.id || !user?.organizationId) return
+
+    try {
+      setIsSubmitting(true)
+      await deleteGoal(initialData.id)
+      toast({
+        title: 'Goal deleted',
+        description: 'Your monthly goal has been deleted successfully.'
+      })
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete goal. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -592,6 +619,15 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
       </div>
 
       <div className="flex justify-end space-x-4">
+        {mode === 'edit' && (
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isSubmitting}
+          >
+            Delete Goal
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={() => router.back()}

@@ -171,4 +171,96 @@ export async function updateKeyResultMetric(
     keyResults: updatedKeyResults,
     updatedAt: new Date()
   })
+}
+
+export async function assignTeamToGoal(
+  goalId: string,
+  teamId: string,
+  role: 'primary' | 'supporting' = 'primary'
+): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId);
+  const goalDoc = await getDoc(goalRef);
+  
+  if (!goalDoc.exists()) {
+    throw new Error('Goal not found');
+  }
+
+  const goal = goalDoc.data() as Goal;
+  const teamRoles = goal.teamRoles || [];
+  
+  // Remove any existing role for this team
+  const filteredRoles = teamRoles.filter(tr => tr.teamId !== teamId);
+  
+  // Add the new role
+  filteredRoles.push({ teamId, role });
+
+  await updateDoc(goalRef, {
+    teamRoles: filteredRoles,
+    updatedAt: new Date()
+  });
+}
+
+export async function assignMemberToGoal(
+  goalId: string,
+  userId: string,
+  role: 'owner' | 'contributor' | 'reviewer'
+): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId);
+  const goalDoc = await getDoc(goalRef);
+  
+  if (!goalDoc.exists()) {
+    throw new Error('Goal not found');
+  }
+
+  const goal = goalDoc.data() as Goal;
+  const assignees = goal.assignees || [];
+  
+  // Remove any existing assignment for this user
+  const filteredAssignees = assignees.filter(a => a.userId !== userId);
+  
+  // Add the new assignment
+  filteredAssignees.push({
+    userId,
+    role,
+    assignedAt: new Date()
+  });
+
+  await updateDoc(goalRef, {
+    assignees: filteredAssignees,
+    updatedAt: new Date()
+  });
+}
+
+export async function removeTeamFromGoal(goalId: string, teamId: string): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId);
+  const goalDoc = await getDoc(goalRef);
+  
+  if (!goalDoc.exists()) {
+    throw new Error('Goal not found');
+  }
+
+  const goal = goalDoc.data() as Goal;
+  const teamRoles = goal.teamRoles || [];
+  
+  await updateDoc(goalRef, {
+    teamRoles: teamRoles.filter(tr => tr.teamId !== teamId),
+    updatedAt: new Date()
+  });
+}
+
+export async function removeMemberFromGoal(goalId: string, userId: string): Promise<void> {
+  const goalRef = doc(db, 'goals', goalId);
+  const goalDoc = await getDoc(goalRef);
+  
+  if (!goalDoc.exists()) {
+    throw new Error('Goal not found');
+  }
+
+  const goal = goalDoc.data() as Goal;
+  const assignees = goal.assignees || [];
+  
+  await updateDoc(goalRef, {
+    assignees: assignees.filter(a => a.userId !== userId),
+    updatedAt: new Date()
+  });
 } 

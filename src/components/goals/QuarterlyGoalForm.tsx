@@ -14,11 +14,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus } from '@/types/goals'
-import { createGoal, updateGoal } from '@/services/goalService'
+import { createGoal, updateGoal, deleteGoal, getGoalsByTimeframe } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format, addMonths, startOfQuarter, endOfQuarter } from 'date-fns'
 import { getFiscalYearInfo, getQuarterInfo, getQuarterRange, getAvailableQuarters } from '@/utils/dateUtils'
-import { getGoalsByTimeframe } from '@/services/goalService'
 
 interface KeyResultWithMetrics {
   id?: string
@@ -282,15 +281,21 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         description: suggestions.enhancedDescription
       }))
 
-      // Update key results with suggestions
-      setKeyResults(suggestions.keyResults.map(kr => ({
-        ...kr,
-        metrics: kr.metrics.map(metric => ({
-          ...metric,
+      // Update metrics with AI suggestions
+      if (suggestions.metrics && suggestions.metrics.length > 0) {
+        const enhancedMetrics = suggestions.metrics.map(metric => ({
+          name: metric.name,
+          target: metric.target || 0,
           current: 0,
-          frequency: 'monthly'
+          unit: metric.unit || '',
+          frequency: 'monthly' as const
         }))
-      })))
+        setKeyResults([{
+          description: 'Key Result 1',
+          targetDate: quarterEnd.toISOString(),
+          metrics: enhancedMetrics
+        }])
+      }
 
       toast({
         title: "Goal Enhanced",
@@ -305,6 +310,33 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
       })
     } finally {
       setIsEnhancing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!initialData?.id || !user?.organizationId) return
+
+    try {
+      setIsSubmitting(true)
+      await deleteGoal(initialData.id)
+      toast({
+        title: 'Goal deleted',
+        description: 'Your quarterly goal has been deleted successfully.'
+      })
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete goal. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -593,18 +625,27 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         )}
       </div>
 
-      <div className="flex justify-end space-x-2">
+      <div className="flex justify-end space-x-4">
+        {mode === 'edit' && (
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isSubmitting}
+          >
+            Delete Goal
+          </Button>
+        )}
         <Button
           variant="outline"
-          onClick={() => router.push(mode === 'edit' ? `/dashboard/goals/${initialData?.id}` : '/dashboard/goals')}
+          onClick={() => router.back()}
         >
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={isSubmitting || !formData.title}
+          disabled={isSubmitting}
         >
-          {isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Creating...') : (mode === 'edit' ? 'Update Goal' : 'Create Goal')}
+          {isSubmitting ? 'Saving...' : mode === 'edit' ? 'Update Goal' : 'Create Goal'}
         </Button>
       </div>
     </div>

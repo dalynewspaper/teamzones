@@ -14,12 +14,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalMilestone } from '@/types/goals'
-import { createGoal, updateGoal, getGoalsByTimeframe } from '@/services/goalService'
+import { createGoal, updateGoal, getGoalsByTimeframe, deleteGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, parseISO } from 'date-fns'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { TeamMember } from '@/types/firestore'
+import { getUserTeams } from '@/services/teamService'
 
 interface WeeklyGoalFormProps {
   initialData?: Goal
@@ -38,6 +40,8 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const [monthlyGoals, setMonthlyGoals] = useState<Goal[]>([])
   const [selectedMonthlyGoal, setSelectedMonthlyGoal] = useState<Goal | null>(null)
   const [isLoadingMonthlyGoals, setIsLoadingMonthlyGoals] = useState(true)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(true)
   
   // State for selected week
   const [selectedWeek, setSelectedWeek] = useState<Date>(propSelectedWeek || new Date())
@@ -47,6 +51,31 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 }) // End week on Sunday
   const calendarWeek = getISOWeek(selectedWeek)
   const year = selectedWeek.getFullYear()
+
+  // Load team members
+  useEffect(() => {
+    const loadTeamMembers = async () => {
+      if (!user?.organizationId) return
+
+      try {
+        setIsLoadingTeamMembers(true)
+        const teams = await getUserTeams(user.uid, user.organizationId)
+        const members = teams.flatMap(team => team.members || [])
+        setTeamMembers(members)
+      } catch (error) {
+        console.error('Error loading team members:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load team members. Please try again.',
+          variant: 'destructive'
+        })
+      } finally {
+        setIsLoadingTeamMembers(false)
+      }
+    }
+
+    loadTeamMembers()
+  }, [user?.organizationId, user?.uid])
 
   // Update form dates when selected week changes
   useEffect(() => {
@@ -78,7 +107,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
     priority: initialData?.priority || 'high' as GoalPriority,
     startDate: initialData?.startDate?.toISOString().split('T')[0] || defaultStartDate,
     endDate: initialData?.endDate?.toISOString().split('T')[0] || defaultEndDate,
-    assignee: initialData?.assignees?.[0] || user?.uid || '',
+    assignee: initialData?.assignees?.[0]?.userId || user?.uid || '',
     status: initialData?.status || 'not_started' as GoalStatus
   })
 
@@ -198,7 +227,11 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
           ...t,
           id: t.id || `new-task-${i}`
         })) as GoalMilestone[],
-        assignees: [formData.assignee],
+        assignees: [{
+          userId: formData.assignee,
+          role: 'owner',
+          assignedAt: new Date()
+        }],
         organizationId: user.organizationId,
         ownerId: initialData?.ownerId || user.uid,
         createdBy: initialData?.createdBy || user.uid,
@@ -323,6 +356,33 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   // Calculate current week dates
   const currentWeekStart = selectedWeek ? startOfWeek(selectedWeek, { weekStartsOn: 1 }) : new Date()
   const currentWeekEnd = selectedWeek ? endOfWeek(selectedWeek, { weekStartsOn: 1 }) : new Date()
+
+  const handleDelete = async () => {
+    if (!initialData?.id || !user?.organizationId) return
+
+    try {
+      setIsSubmitting(true)
+      await deleteGoal(initialData.id)
+      toast({
+        title: 'Goal deleted',
+        description: 'Your goal has been deleted successfully.'
+      })
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete goal. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -489,6 +549,30 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div>
+          <Label>Assignee</Label>
+          <Select
+            value={formData.assignee}
+            onValueChange={(value) => handleInputChange('assignee', value)}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Select assignee" />
+            </SelectTrigger>
+            <SelectContent>
+              {user && (
+                <SelectItem value={user.uid}>
+                  {user.displayName || user.email} (Me)
+                </SelectItem>
+              )}
+              {teamMembers.map((member) => (
+                <SelectItem key={member.userId} value={member.userId}>
+                  {member.userId}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -697,6 +781,15 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       </div>
 
       <div className="flex justify-end space-x-4">
+        {mode === 'edit' && (
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isSubmitting}
+          >
+            Delete Goal
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={() => router.back()}

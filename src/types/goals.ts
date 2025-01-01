@@ -33,6 +33,12 @@ export interface GoalAlignment {
   weight: number // Percentage contribution to parent goal (0-100)
 }
 
+export interface GoalAssignee {
+  userId: string
+  role: 'owner' | 'contributor' | 'reviewer'
+  assignedAt: Date
+}
+
 export interface Goal {
   id: string
   title: string
@@ -48,7 +54,7 @@ export interface Goal {
   metrics: GoalMetric[]
   keyResults: KeyResult[]
   milestones: GoalMilestone[]
-  assignees: string[]
+  assignees: GoalAssignee[]
   organizationId: string
   ownerId: string
   teamId?: string
@@ -63,6 +69,10 @@ export interface Goal {
   createdAt: Date
   updatedAt: Date
   createdBy: string
+  teamRoles?: {
+    teamId: string
+    role: 'primary' | 'supporting'
+  }[]
 }
 
 export interface ExistingGoalContent {

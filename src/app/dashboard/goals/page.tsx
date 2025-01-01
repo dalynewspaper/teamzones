@@ -13,7 +13,7 @@ export default function GoalsPage() {
   const [selectedTimeframe, setSelectedTimeframe] = useState<GoalTimeframe>('annual')
 
   const handleNewGoal = () => {
-    router.push(`/dashboard/goals/new/${selectedTimeframe}`)
+    router.push(`/dashboard/goals/${selectedTimeframe}/create`)
   }
 
   return (
@@ -28,7 +28,7 @@ export default function GoalsPage() {
               </p>
             </div>
             <Button onClick={handleNewGoal}>
-              New {selectedTimeframe} Goal
+              New {selectedTimeframe.charAt(0).toUpperCase() + selectedTimeframe.slice(1)} Goal
             </Button>
           </div>
 
@@ -36,12 +36,20 @@ export default function GoalsPage() {
             <TabsList>
               <TabsTrigger value="annual">Annual Goals</TabsTrigger>
               <TabsTrigger value="quarterly">Quarterly Goals</TabsTrigger>
+              <TabsTrigger value="monthly">Monthly Goals</TabsTrigger>
+              <TabsTrigger value="weekly">Weekly Goals</TabsTrigger>
             </TabsList>
             <TabsContent value="annual">
               <GoalsList timeframe="annual" />
             </TabsContent>
             <TabsContent value="quarterly">
               <GoalsList timeframe="quarterly" />
+            </TabsContent>
+            <TabsContent value="monthly">
+              <GoalsList timeframe="monthly" />
+            </TabsContent>
+            <TabsContent value="weekly">
+              <GoalsList timeframe="weekly" />
             </TabsContent>
           </Tabs>
         </div>

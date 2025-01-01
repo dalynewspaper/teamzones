@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { ExistingGoalContent } from '@/types/goals'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { title, description, timeframe, parentGoal } = await request.json()
+    const { title, description, timeframe, parentGoal, generateMilestones, generateMetrics, existingContent } = await request.json()
 
     if (!title) {
       return NextResponse.json(
@@ -24,9 +25,67 @@ export async function POST(request: Request) {
       )
     }
 
-    // Different prompts for annual vs quarterly goals
-    const prompt = timeframe.toLowerCase().includes('q') 
-      ? `As an expert in OKRs and goal setting, help create a tactical quarterly goal that contributes to this annual objective:
+    let prompt = ''
+    let responseFormat = ''
+
+    if (timeframe.toLowerCase().includes('month')) {
+      prompt = `As an expert in OKRs and goal setting, help ${existingContent ? 'refine and enhance' : 'create'} this monthly goal:
+
+Current Goal:
+Title: ${title}
+Description: ${description || ''}
+Timeframe: ${timeframe}
+${parentGoal ? `
+Parent Quarterly Goal:
+Title: ${parentGoal.title}
+Description: ${parentGoal.description}
+` : ''}${existingContent?.milestones?.length ? `
+
+Current Milestones:
+${existingContent.milestones.map((m: { title: string; description: string; dueDate: string }, i: number) => `
+${i + 1}. ${m.title}
+   Description: ${m.description}
+   Due Date: ${m.dueDate}`).join('\n')}` : ''}${existingContent?.metrics?.length ? `
+
+Current Metrics:
+${existingContent.metrics.map((m: { name: string; target: number; unit: string }, i: number) => `
+${i + 1}. ${m.name}
+   Target: ${m.target} ${m.unit}`).join('\n')}` : ''}
+
+Please provide:
+1. An ${existingContent ? 'refined' : 'enhanced'}, clearer, and more actionable version of the goal title
+2. A comprehensive description that explains:
+   - The specific deliverables and success criteria
+   - How this goal contributes to the quarterly objective
+   - What needs to be accomplished this month
+${generateMilestones ? `3. ${existingContent?.milestones?.length ? 'Refined versions of the existing milestones' : '3-4 key milestones that break down the goal into actionable steps'}
+   - Each milestone should have a clear title and description
+   - Milestones should be spread across the month` : ''}
+${generateMetrics ? `4. ${existingContent?.metrics?.length ? 'Refined versions of the existing metrics' : '2-3 progress metrics that help track goal achievement'}
+   - Each metric should have a specific target number and unit
+   - Metrics should be measurable on a weekly basis` : ''}`
+
+      responseFormat = `Format the response in JSON with this structure:
+{
+  "enhancedTitle": "string",
+  "enhancedDescription": "string"${generateMilestones ? `,
+  "milestones": [
+    {
+      "title": "string",
+      "description": "string",
+      "dueDate": "YYYY-MM-DD"
+    }
+  ]` : ''}${generateMetrics ? `,
+  "metrics": [
+    {
+      "name": "string",
+      "target": number,
+      "unit": "string"
+    }
+  ]` : ''}
+}`
+    } else if (timeframe.toLowerCase().includes('q')) {
+      prompt = `As an expert in OKRs and goal setting, help create a tactical quarterly goal that contributes to this annual objective:
 
 Parent Goal (Annual):
 Title: ${parentGoal.title}
@@ -46,7 +105,28 @@ Please provide:
    - Why this is the right focus for this quarter
 3. 2-3 key results that would help achieve this goal, each with 1-2 specific metrics
 4. Each metric should include a specific target number and unit of measurement`
-      : `As an expert in OKRs and goal setting, help enhance and structure this annual goal:
+
+      responseFormat = `Format the response in JSON with this structure:
+{
+  "enhancedTitle": "string",
+  "enhancedDescription": "string",
+  "keyResults": [
+    {
+      "description": "string",
+      "targetDate": "string",
+      "metrics": [
+        {
+          "name": "string",
+          "target": number,
+          "unit": "string",
+          "frequency": "monthly"
+        }
+      ]
+    }
+  ]
+}`
+    } else {
+      prompt = `As an expert in OKRs and goal setting, help enhance and structure this annual goal:
 
 Current Goal:
 Title: ${title}
@@ -62,34 +142,34 @@ Please provide:
 3. 2-3 key results that would help achieve this goal, each with 1-2 specific metrics
 4. Each metric should include a specific target number and unit of measurement`
 
-    const promptSuffix = `
-Format the response in JSON with this structure:
+      responseFormat = `Format the response in JSON with this structure:
 {
   "enhancedTitle": "string",
   "enhancedDescription": "string",
   "keyResults": [
     {
       "description": "string",
-      "targetDate": "${timeframe}",
+      "targetDate": "string",
       "metrics": [
         {
           "name": "string",
           "target": number,
           "unit": "string",
-          "frequency": "${timeframe.toLowerCase().includes('q') ? 'monthly' : 'quarterly'}"
+          "frequency": "quarterly"
         }
       ]
     }
   ]
-}
+}`
+    }
 
-Make sure all metrics are specific, measurable, and ${timeframe.toLowerCase().includes('q') ? 'demonstrate clear progress toward the annual goal' : 'align with the organization\'s strategic objectives'}.`
+    prompt += `\n\n${responseFormat}\n\nIMPORTANT: Respond ONLY with the JSON object, no additional text or explanation.`
 
     console.log('Sending request to OpenAI...')
     const completion = await openai.chat.completions.create({
       messages: [{ 
         role: "user", 
-        content: prompt + promptSuffix + "\n\nIMPORTANT: Respond ONLY with the JSON object, no additional text or explanation." 
+        content: prompt
       }],
       model: "gpt-4",
       temperature: 0.7

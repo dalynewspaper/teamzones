@@ -63,4 +63,49 @@ export interface Goal {
   createdAt: Date
   updatedAt: Date
   createdBy: string
+}
+
+export interface ExistingGoalContent {
+  title: string
+  description: string
+  milestones?: {
+    title: string
+    description: string
+    dueDate: string
+  }[]
+  metrics?: {
+    name: string
+    target: number
+    unit: string
+  }[]
+}
+
+export interface ParentGoalInfo {
+  parentGoal: {
+    title: string
+    description: string
+  }
+  generateMilestones?: boolean
+  generateMetrics?: boolean
+  timeframe?: GoalTimeframe
+  existingContent?: ExistingGoalContent
+}
+
+export interface MilestoneSuggestion {
+  title: string
+  description: string
+  dueDate: string
+}
+
+export interface MetricSuggestion {
+  name: string
+  target: number
+  unit: string
+}
+
+export interface GoalSuggestions {
+  enhancedTitle: string
+  enhancedDescription: string
+  milestones?: MilestoneSuggestion[]
+  metrics?: MetricSuggestion[]
 } 

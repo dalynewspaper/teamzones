@@ -57,8 +57,8 @@ export function GoalsList({ timeframe }: GoalsListProps) {
       <Card className="p-12 text-center">
         <h3 className="text-lg font-medium mb-2">No goals found</h3>
         <p className="text-muted-foreground mb-6">Get started by creating your first goal</p>
-        <Link href={`/dashboard/goals/new/${timeframe}`}>
-          <Button>Create {timeframe} Goal</Button>
+        <Link href={`/dashboard/goals/${timeframe}/create`}>
+          <Button>Create {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Goal</Button>
         </Link>
       </Card>
     )

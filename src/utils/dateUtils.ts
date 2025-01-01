@@ -1,4 +1,5 @@
 import { format, addMonths, startOfQuarter, endOfQuarter, startOfMonth, endOfMonth } from 'date-fns'
+import { Timestamp } from 'firebase/firestore'
 
 interface QuarterInfo {
   startDate: Date
@@ -83,4 +84,31 @@ export function getAvailableQuarters(): AvailableQuarter[] {
       range: getQuarterRange(4, planningYear)
     }
   ]
+}
+
+export function getDateFromTimestamp(date: Date | Timestamp | any): Date {
+  if (date instanceof Timestamp) {
+    return date.toDate()
+  }
+  if (date?.seconds && date?.nanoseconds) {
+    return new Timestamp(date.seconds, date.nanoseconds).toDate()
+  }
+  if (date instanceof Date) {
+    return date
+  }
+  return new Date(date)
+}
+
+export function formatDate(date: Date | Timestamp | any, dateFormat: string = 'MM/dd/yyyy'): string {
+  try {
+    const dateObj = getDateFromTimestamp(date)
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      console.error('Invalid date:', date)
+      return 'Invalid Date'
+    }
+    return format(dateObj, dateFormat)
+  } catch (error) {
+    console.error('Error formatting date:', error)
+    return 'Invalid Date'
+  }
 } 

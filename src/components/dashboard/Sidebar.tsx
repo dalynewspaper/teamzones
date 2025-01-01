@@ -38,9 +38,9 @@ function TeamItem({ team }: { team: Team }) {
 }
 
 export function Sidebar() {
-  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
   const [organizationName, setOrganizationName] = useState('')
   const [teams, setTeams] = useState<Team[]>([])
@@ -149,7 +149,11 @@ export function Sidebar() {
         <Link href="/dashboard">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname === '/dashboard' 
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <Home className="h-4 w-4 mr-3" />
             Home
@@ -158,7 +162,11 @@ export function Sidebar() {
         <Link href="/dashboard/goals">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard/goals' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname.startsWith('/dashboard/goals')
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <Target className="h-4 w-4 mr-3" />
             Goals
@@ -167,7 +175,11 @@ export function Sidebar() {
         <Link href="/dashboard/updates">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard/updates' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname === '/dashboard/updates'
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <Video className="h-4 w-4 mr-3" />
             My Updates
@@ -176,7 +188,11 @@ export function Sidebar() {
         <Link href="/dashboard/insights">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard/insights' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname === '/dashboard/insights'
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <BarChart3 className="h-4 w-4 mr-3" />
             Insights
@@ -185,7 +201,11 @@ export function Sidebar() {
         <Link href="/dashboard/activity">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard/activity' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname === '/dashboard/activity'
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <Activity className="h-4 w-4 mr-3" />
             Activity
@@ -194,7 +214,11 @@ export function Sidebar() {
         <Link href="/dashboard/settings">
           <Button 
             variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${pathname === '/dashboard/settings' ? 'bg-blue-50 text-blue-700' : ''}`}
+            className={`w-full justify-start text-sm font-medium ${
+              pathname === '/dashboard/settings'
+                ? 'bg-gray-100 text-gray-900' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
             <Settings className="h-4 w-4 mr-3" />
             Settings

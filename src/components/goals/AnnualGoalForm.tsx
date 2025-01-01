@@ -11,24 +11,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe } from '@/types/goals'
+import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, KeyResult } from '@/types/goals'
 import { createGoal, updateGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format } from 'date-fns'
-
-interface KeyResultWithMetrics {
-  id?: string
-  description: string
-  targetDate: string
-  metrics: {
-    id?: string
-    name: string
-    target: number
-    current: number
-    unit: string
-    frequency: 'monthly' | 'quarterly'
-  }[]
-}
 
 interface AnnualGoalFormProps {
   initialData?: Goal
@@ -41,62 +27,58 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
-  const [keyResults, setKeyResults] = useState<KeyResultWithMetrics[]>(
-    initialData?.keyResults?.map(kr => ({
-      id: kr.id,
-      description: kr.description,
-      targetDate: kr.targetDate,
-      metrics: kr.metrics.map(m => ({
-        id: m.id,
-        name: m.name,
-        target: m.target,
-        current: m.current,
-        unit: m.unit,
-        frequency: m.frequency as 'monthly' | 'quarterly'
-      }))
-    })) || [{
-      description: '',
-      targetDate: '',
-      metrics: []
-    }]
-  )
   const [isEnhancing, setIsEnhancing] = useState(false)
-
+  
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
-    type: initialData?.type || 'company' as GoalType,
+    type: initialData?.type || 'team' as GoalType,
     priority: initialData?.priority || 'high' as GoalPriority,
-    startDate: initialData?.startDate.toISOString().split('T')[0] || new Date(2025, 0, 1).toISOString().split('T')[0],
-    endDate: initialData?.endDate.toISOString().split('T')[0] || new Date(2025, 11, 31).toISOString().split('T')[0],
+    startDate: initialData?.startDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+    endDate: initialData?.endDate?.toISOString().split('T')[0] || new Date(new Date().getFullYear(), 11, 31).toISOString().split('T')[0],
   })
+
+  const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
+  const [keyResults, setKeyResults] = useState<Partial<KeyResult>[]>(initialData?.keyResults || [])
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleKeyResultChange = (index: number, field: keyof KeyResultWithMetrics, value: any) => {
-    const newKeyResults = [...keyResults]
-    newKeyResults[index] = { ...newKeyResults[index], [field]: value }
-    setKeyResults(newKeyResults)
+  const handleKeyResultChange = (index: number, field: keyof KeyResult, value: string) => {
+    setKeyResults(prev => {
+      const newKeyResults = [...prev]
+      newKeyResults[index] = { 
+        ...newKeyResults[index], 
+        [field]: value,
+        id: newKeyResults[index]?.id || `kr-${index}`
+      }
+      return newKeyResults
+    })
   }
 
   const handleAddKeyResult = () => {
-    setKeyResults([...keyResults, { 
-      description: '', 
-      targetDate: new Date(2025, 11, 31).toISOString(), // December 31, 2025
-      metrics: [] 
+    setKeyResults(prev => [...prev, {
+      id: `kr-${prev.length}`,
+      description: '',
+      targetDate: formData.endDate,
+      metrics: []
     }])
   }
 
-  const handleMetricChange = (index: number, field: keyof GoalMetric, value: any) => {
-    const newMetrics = [...metrics]
-    if (field === 'target' || field === 'current') {
-      value = value === '' ? 0 : Number(value)
-    }
-    newMetrics[index] = { ...newMetrics[index], [field]: value }
-    setMetrics(newMetrics)
+  const handleMetricChange = (index: number, field: keyof GoalMetric, value: string | number) => {
+    setMetrics(prev => {
+      const newMetrics = [...prev]
+      if (field === 'target' || field === 'current') {
+        value = value === '' ? 0 : Number(value)
+      }
+      newMetrics[index] = { 
+        ...newMetrics[index], 
+        [field]: value,
+        id: newMetrics[index]?.id || `metric-${index}`
+      }
+      return newMetrics
+    })
   }
 
   const handleDeleteMetric = (index: number) => {
@@ -105,6 +87,7 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
 
   const handleAddMetric = () => {
     setMetrics(prev => [...prev, {
+      id: `metric-${prev.length}`,
       name: '',
       target: 0,
       current: 0,
@@ -114,7 +97,23 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
   }
 
   const handleSubmit = async () => {
-    if (!user?.organizationId) return
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create or edit goals.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!user.organizationId) {
+      toast({
+        title: "Organization required",
+        description: "You need to be part of an organization to manage goals.",
+        variant: "destructive"
+      })
+      return
+    }
 
     try {
       setIsSubmitting(true)
@@ -134,15 +133,14 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
           id: m.id || `new-metric-${i}` 
         })) as GoalMetric[],
         keyResults: keyResults.map((kr, i) => ({
+          ...kr,
           id: kr.id || `new-kr-${i}`,
-          description: kr.description,
-          targetDate: kr.targetDate,
-          metrics: kr.metrics.map((m, j) => ({
+          metrics: kr.metrics?.map((m, j) => ({
             ...m,
             id: m.id || `new-kr-${i}-metric-${j}`
-          }))
-        })),
-        milestones: initialData?.milestones || [],
+          })) || []
+        })) as KeyResult[],
+        milestones: [],
         assignees: initialData?.assignees || [],
         organizationId: user.organizationId,
         ownerId: initialData?.ownerId || user.uid,
@@ -154,13 +152,13 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
         await updateGoal(initialData.id, goalData)
         toast({
           title: 'Goal updated',
-          description: 'Your goal has been updated successfully.'
+          description: 'Your annual goal has been updated successfully.'
         })
       } else {
         await createGoal(goalData)
         toast({
           title: 'Goal created',
-          description: 'Your new goal has been created successfully.'
+          description: 'Your new annual goal has been created successfully.'
         })
       }
       
@@ -171,9 +169,19 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
       }
     } catch (error) {
       console.error('Error saving goal:', error)
+      let errorMessage = 'An unexpected error occurred. Please try again.'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('PERMISSION_DENIED')) {
+          errorMessage = 'You do not have permission to perform this action. Please check your organization membership.'
+        } else if (error.message.includes('organizationId')) {
+          errorMessage = 'Organization information is missing. Please ensure you are part of an organization.'
+        }
+      }
+      
       toast({
         title: 'Error',
-        description: `Failed to ${mode === 'edit' ? 'update' : 'create'} goal. Please try again.`,
+        description: errorMessage,
         variant: 'destructive'
       })
     } finally {
@@ -192,28 +200,76 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
     setKeyResults(keyResults.filter((_, i) => i !== index))
   }
 
-  const handleKeyResultMetricChange = (keyResultIndex: number, metricIndex: number, field: string, value: any) => {
-    const newKeyResults = [...keyResults]
-    if (field === 'target' || field === 'current') {
-      value = value === '' ? 0 : Number(value)
-    }
-    newKeyResults[keyResultIndex].metrics[metricIndex] = {
-      ...newKeyResults[keyResultIndex].metrics[metricIndex],
-      [field]: value
-    }
-    setKeyResults(newKeyResults)
+  const handleKeyResultMetricChange = (krIndex: number, metricIndex: number, field: keyof GoalMetric, value: string | number) => {
+    setKeyResults(prev => {
+      const newKeyResults = [...prev]
+      const keyResult = newKeyResults[krIndex]
+      
+      if (!keyResult) return prev
+      
+      const defaultMetric: GoalMetric = {
+        id: `kr-${krIndex}-metric-${metricIndex}`,
+        name: '',
+        target: 0,
+        current: 0,
+        unit: '',
+        frequency: 'quarterly'
+      }
+
+      // Initialize metrics array if it doesn't exist
+      if (!Array.isArray(keyResult.metrics)) {
+        keyResult.metrics = []
+      }
+
+      // Get existing metric or use default
+      const existingMetric = keyResult.metrics[metricIndex] || defaultMetric
+      
+      // Convert value based on field type
+      const processedValue = field === 'target' || field === 'current'
+        ? (value === '' ? 0 : Number(value))
+        : String(value)
+      
+      // Create updated metric with the new value
+      const updatedMetric: GoalMetric = {
+        id: existingMetric.id,
+        name: field === 'name' ? processedValue as string : existingMetric.name,
+        target: field === 'target' ? processedValue as number : existingMetric.target,
+        current: field === 'current' ? processedValue as number : existingMetric.current,
+        unit: field === 'unit' ? processedValue as string : existingMetric.unit,
+        frequency: 'quarterly'
+      }
+      
+      // Update the metrics array
+      const metrics = keyResult.metrics || []
+      metrics[metricIndex] = updatedMetric
+      keyResult.metrics = metrics
+      
+      return newKeyResults
+    })
   }
 
-  const handleAddKeyResultMetric = (keyResultIndex: number) => {
-    const newKeyResults = [...keyResults]
-    newKeyResults[keyResultIndex].metrics.push({
-      name: '',
-      target: 0,
-      current: 0,
-      unit: '',
-      frequency: 'quarterly'
+  const handleAddKeyResultMetric = (krIndex: number) => {
+    setKeyResults(prev => {
+      const newKeyResults = [...prev]
+      const keyResult = newKeyResults[krIndex]
+      
+      if (!keyResult) return prev
+      if (!keyResult.metrics) {
+        keyResult.metrics = []
+      }
+
+      const newMetric: GoalMetric = {
+        id: `kr-${krIndex}-metric-${keyResult.metrics.length}`,
+        name: '',
+        target: 0,
+        current: 0,
+        unit: '',
+        frequency: 'quarterly'
+      }
+
+      keyResult.metrics = [...keyResult.metrics, newMetric]
+      return newKeyResults
     })
-    setKeyResults(newKeyResults)
   }
 
   const handleDeleteKeyResultMetric = (keyResultIndex: number, metricIndex: number) => {
@@ -237,28 +293,35 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
       const suggestions = await enhanceGoal(
         formData.title,
         formData.description,
-        'Annual (2025)'
+        'Annual',
+        {
+          generateMetrics: true,
+          timeframe: 'annual'
+        }
       )
 
-      // Update form with enhanced content
+      // Update form data with AI suggestions
       setFormData(prev => ({
         ...prev,
-        title: suggestions.enhancedTitle,
-        description: suggestions.enhancedDescription
+        title: suggestions.enhancedTitle || prev.title,
+        description: suggestions.enhancedDescription || prev.description
       }))
 
-      // Update key results with suggestions, adding current: 0 to each metric
-      setKeyResults(suggestions.keyResults.map(kr => ({
-        ...kr,
-        metrics: kr.metrics.map(metric => ({
-          ...metric,
-          current: 0 // Initialize current value to 0
-        }))
-      })))
+      // Update metrics with AI suggestions
+      if (suggestions.metrics && suggestions.metrics.length > 0) {
+        setMetrics(suggestions.metrics.map((m, index) => ({
+          id: `new-metric-${index}`,
+          name: m.name || '',
+          target: m.target || 0,
+          current: 0,
+          unit: m.unit || '',
+          frequency: 'quarterly' as GoalTimeframe
+        })))
+      }
 
       toast({
-        title: "Goal Enhanced",
-        description: "Your goal has been enhanced with AI suggestions.",
+        title: "Goal enhanced",
+        description: "AI has helped improve your goal description and added suggested metrics."
       })
     } catch (error) {
       console.error('Error enhancing goal:', error)
@@ -378,153 +441,140 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
 
       {/* Key Results */}
       <div className="space-y-4">
-        <Label className="text-lg font-semibold">Key Results (OKRs)</Label>
-        {keyResults.map((kr, krIndex) => (
-          <Card key={krIndex} className="p-4 space-y-4">
-            <div className="flex justify-between items-start">
-              <div className="flex-1 space-y-4">
-                <div>
-                  <Label>Key Result {krIndex + 1}</Label>
-                  <Input
-                    value={kr.description}
-                    onChange={(e) => handleKeyResultChange(krIndex, 'description', e.target.value)}
-                    placeholder="e.g., Achieve $10M ARR by Q4"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Target Date</Label>
-                  <Select
-                    value={kr.targetDate}
-                    onValueChange={(value) => handleKeyResultChange(krIndex, 'targetDate', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select quarter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {quarters.map((q) => (
-                        <SelectItem key={q.label} value={q.date.toISOString()}>
-                          {q.label} (Due {format(q.date, 'MM/dd/yyyy')})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Metrics for this Key Result */}
-                <div className="space-y-6">
-                  <Label>Success Metrics</Label>
-                  {kr.metrics.map((metric, metricIndex) => (
-                    <div key={metricIndex} className="p-4 bg-gray-50 rounded-lg space-y-4">
-                      <div className="flex gap-4 items-start">
-                        <div className="flex-1 space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label>Metric Name</Label>
-                              <Input
-                                value={metric.name}
-                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
-                                placeholder="e.g., ARR Growth Rate"
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label>Unit</Label>
-                              <Input
-                                type="text"
-                                value={metric.unit}
-                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
-                                placeholder="e.g., %"
-                                className="mt-1"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label>Target Value</Label>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={metric.target || ''}
-                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', e.target.value)}
-                                placeholder="0"
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label>Current Value</Label>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={metric.current || ''}
-                                onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'current', e.target.value)}
-                                placeholder="0"
-                                className="mt-1"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <Label>Tracking Frequency</Label>
-                            <Select
-                              value={metric.frequency}
-                              onValueChange={(value) => handleKeyResultMetricChange(krIndex, metricIndex, 'frequency', value)}
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Quarterly" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="quarterly">Quarterly</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => handleDeleteKeyResultMetric(krIndex, metricIndex)}
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddKeyResultMetric(krIndex)}
-                    >
-                      Add Metric
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                onClick={() => handleDeleteKeyResult(krIndex)}
-              >
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </div>
-          </Card>
-        ))}
-
-        {keyResults.length < 5 && (
+        <div className="flex items-center justify-between">
+          <Label className="text-lg font-semibold">Key Results</Label>
           <Button
             type="button"
             variant="outline"
+            size="sm"
             onClick={handleAddKeyResult}
-            className="w-full"
           >
             Add Key Result
           </Button>
-        )}
+        </div>
+
+        {keyResults.map((kr, krIndex) => (
+          <Card key={krIndex} className="p-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Key Result {krIndex + 1}</h4>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setKeyResults(prev => prev.filter((_, i) => i !== krIndex))
+                  }}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={kr.description || ''}
+                  onChange={(e) => handleKeyResultChange(krIndex, 'description', e.target.value)}
+                  placeholder="Describe what needs to be achieved"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label>Target Date</Label>
+                <Input
+                  type="date"
+                  value={kr.targetDate || ''}
+                  onChange={(e) => handleKeyResultChange(krIndex, 'targetDate', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Metrics for this Key Result */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>Success Metrics</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddKeyResultMetric(krIndex)}
+                  >
+                    Add Metric
+                  </Button>
+                </div>
+
+                {kr.metrics?.map((metric, metricIndex) => (
+                  <div key={metricIndex} className="p-4 bg-gray-50 rounded-lg space-y-4">
+                    <div className="flex gap-4 items-start">
+                      <div className="flex-1 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Metric Name</Label>
+                            <Input
+                              value={metric.name || ''}
+                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
+                              placeholder="e.g., ARR Growth Rate"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>Unit</Label>
+                            <Input
+                              type="text"
+                              value={metric.unit || ''}
+                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
+                              placeholder="e.g., %"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Target Value</Label>
+                            <Input
+                              type="number"
+                              value={metric.target || 0}
+                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', e.target.value)}
+                              placeholder="e.g., 100"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>Current Value</Label>
+                            <Input
+                              type="number"
+                              value={metric.current || 0}
+                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'current', e.target.value)}
+                              placeholder="e.g., 0"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setKeyResults(prev => {
+                            const newKeyResults = [...prev]
+                            const keyResult = newKeyResults[krIndex]
+                            if (!keyResult?.metrics) return prev
+                            keyResult.metrics = keyResult.metrics.filter((_, i) => i !== metricIndex)
+                            return newKeyResults
+                          })
+                        }}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
       <div className="flex justify-end space-x-2">

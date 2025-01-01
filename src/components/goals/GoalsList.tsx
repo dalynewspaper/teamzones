@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronRight, Flag, Target, Calendar, Users2 } from 'lucide-react'
 import Link from 'next/link'
+import { formatDate } from '@/utils/dateUtils'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 
 interface GoalsListProps {
   timeframe: GoalTimeframe
@@ -17,6 +19,7 @@ interface GoalsListProps {
 
 export function GoalsList({ timeframe }: GoalsListProps) {
   const { user } = useAuth()
+  const { dateFormat } = useOrgSettings()
   const [goals, setGoals] = useState<Goal[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -91,7 +94,9 @@ export function GoalsList({ timeframe }: GoalsListProps) {
                 <div className="flex items-center gap-6 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4" />
-                    <span>{new Date(goal.startDate).toLocaleDateString()} - {new Date(goal.endDate).toLocaleDateString()}</span>
+                    <span>
+                      {formatDate(goal.startDate, dateFormat)} - {formatDate(goal.endDate, dateFormat)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Flag className="h-4 w-4" />

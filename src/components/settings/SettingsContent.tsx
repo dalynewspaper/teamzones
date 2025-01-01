@@ -60,7 +60,8 @@ export function SettingsContent() {
     name: '',
     domain: '',
     logo: '',
-    weekStartDay: '1'
+    weekStartDay: '1',
+    dateFormat: 'MM/dd/yyyy'
   })
 
   // Load personal settings
@@ -144,7 +145,8 @@ export function SettingsContent() {
         name: orgSettings.name,
         domain: orgSettings.domain,
         settings: {
-          weekStartDay: orgSettings.weekStartDay
+          weekStartDay: orgSettings.weekStartDay,
+          dateFormat: orgSettings.dateFormat
         },
         updatedAt: new Date().toISOString()
       })
@@ -640,6 +642,23 @@ export function SettingsContent() {
                   />
                   <p className="mt-1 text-sm text-gray-500">
                     Used to verify team members
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Date Format</label>
+                  <select
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                    value={orgSettings.dateFormat}
+                    onChange={(e) => setOrgSettings(s => ({ ...s, dateFormat: e.target.value }))}
+                  >
+                    <option value="MM/dd/yyyy">MM/DD/YYYY (e.g., 12/31/2024)</option>
+                    <option value="dd/MM/yyyy">DD/MM/YYYY (e.g., 31/12/2024)</option>
+                    <option value="yyyy-MM-dd">YYYY-MM-DD (e.g., 2024-12-31)</option>
+                    <option value="MMMM d, yyyy">MMMM D, YYYY (e.g., December 31, 2024)</option>
+                    <option value="d MMMM yyyy">D MMMM YYYY (e.g., 31 December 2024)</option>
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Choose how dates will be displayed across the workspace
                   </p>
                 </div>
                 <Button

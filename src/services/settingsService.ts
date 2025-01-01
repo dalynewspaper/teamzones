@@ -21,6 +21,7 @@ interface OrganizationSettings {
   logo: string
   weekStartDay: string
   allowedDomains: string[]
+  dateFormat: string
 }
 
 export async function updatePersonalSettings(userId: string, settings: Partial<PersonalSettings>) {
@@ -46,7 +47,8 @@ export async function updateOrganizationSettings(organizationId: string | null, 
     domain: settings.domain,
     logo: settings.logo,
     'settings.weekStartDay': settings.weekStartDay,
-    'settings.allowedDomains': settings.allowedDomains
+    'settings.allowedDomains': settings.allowedDomains,
+    'settings.dateFormat': settings.dateFormat
   })
 }
 
@@ -92,6 +94,7 @@ export async function getOrganizationSettings(organizationId: string | null): Pr
     domain: data.domain || '',
     logo: data.logo || '',
     weekStartDay: data.settings?.weekStartDay || '1',
-    allowedDomains: data.settings?.allowedDomains || []
+    allowedDomains: data.settings?.allowedDomains || [],
+    dateFormat: data.settings?.dateFormat || 'MM/dd/yyyy'
   }
 } 

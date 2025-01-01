@@ -33,9 +33,10 @@ interface KeyResultWithMetrics {
 interface AnnualGoalFormProps {
   initialData?: Goal
   mode?: 'create' | 'edit'
+  onSuccess?: () => void
 }
 
-export function AnnualGoalForm({ initialData, mode = 'create' }: AnnualGoalFormProps) {
+export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: AnnualGoalFormProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -82,7 +83,11 @@ export function AnnualGoalForm({ initialData, mode = 'create' }: AnnualGoalFormP
   }
 
   const handleAddKeyResult = () => {
-    setKeyResults([...keyResults, { description: '', targetDate: '', metrics: [] }])
+    setKeyResults([...keyResults, { 
+      description: '', 
+      targetDate: new Date(2025, 11, 31).toISOString(), // December 31, 2025
+      metrics: [] 
+    }])
   }
 
   const handleMetricChange = (index: number, field: keyof GoalMetric, value: any) => {
@@ -159,7 +164,11 @@ export function AnnualGoalForm({ initialData, mode = 'create' }: AnnualGoalFormP
         })
       }
       
-      router.push('/dashboard/goals')
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
     } catch (error) {
       console.error('Error saving goal:', error)
       toast({

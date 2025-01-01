@@ -1,192 +1,126 @@
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Goal, GoalTimeframe, GoalType, GoalMetric, KeyResult } from '@/types/goals'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { Goal, GoalTimeframe } from '@/types/goals'
+import { getGoalsByTimeframe } from '@/services/goalService'
 import { Card } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronRight, Plus, Target, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ChevronRight, Flag, Target, Calendar, Users2 } from 'lucide-react'
+import Link from 'next/link'
 
 interface GoalsListProps {
-  goals: Goal[]
   timeframe: GoalTimeframe
-  onAddGoal?: (parentId?: string) => void
-  isLoading?: boolean
 }
 
-interface GoalItemProps {
-  goal: Goal
-  level: number
-  timeframe: GoalTimeframe
-  onAddSubgoal?: (parentId: string) => void
-  childGoals?: Goal[]
-}
+export function GoalsList({ timeframe }: GoalsListProps) {
+  const { user } = useAuth()
+  const [goals, setGoals] = useState<Goal[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-function MetricDisplay({ metric }: { metric: GoalMetric }) {
-  const progress = (metric.current / metric.target) * 100
-  const color = progress >= 100 ? 'text-green-600' : progress >= 70 ? 'text-blue-600' : 'text-yellow-600'
-
-  return (
-    <div className="text-sm">
-      <span className="text-gray-500">{metric.name}: </span>
-      <span className={`font-medium ${color}`}>
-        {metric.current}/{metric.target} {metric.unit}
-      </span>
-    </div>
-  )
-}
-
-function GoalItem({ goal, level, timeframe, onAddSubgoal, childGoals = [] }: GoalItemProps) {
-  const [isExpanded, setIsExpanded] = useState(true)
-  const router = useRouter()
-  const paddingLeft = `${level * 2}rem`
-
-  const handleGoalClick = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent expansion toggle
-    router.push(`/dashboard/goals/${goal.id}`)
-  }
-
-  const getStatusIcon = () => {
-    switch (goal.status) {
-      case 'completed':
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />
-      case 'at_risk':
-        return <AlertCircle className="h-5 w-5 text-red-500" />
-      default:
-        return <Target className="h-5 w-5 text-blue-600" />
+  useEffect(() => {
+    const loadGoals = async () => {
+      if (!user?.organizationId) return
+      
+      try {
+        setIsLoading(true)
+        const fetchedGoals = await getGoalsByTimeframe(timeframe, user.organizationId)
+        setGoals(fetchedGoals)
+      } catch (error) {
+        console.error('Error loading goals:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
 
-  const getTotalMetricsCount = () => {
-    const topLevelMetrics = goal.metrics?.length || 0
-    const keyResultMetrics = goal.keyResults?.reduce((total, kr) => total + (kr.metrics?.length || 0), 0) || 0
-    return topLevelMetrics + keyResultMetrics
-  }
+    loadGoals()
+  }, [timeframe, user?.organizationId])
 
-  return (
-    <div style={{ paddingLeft }}>
-      <Card 
-        className="mb-4 hover:shadow-md transition-shadow cursor-pointer"
-        onClick={handleGoalClick}
-      >
-        <div className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                {childGoals.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="p-0 h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsExpanded(!isExpanded)
-                    }}
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon()}
-                  <h3 className="font-medium text-gray-900">{goal.title}</h3>
-                </div>
-              </div>
-              {goal.description && (
-                <p className="mt-1 text-sm text-gray-500">{goal.description}</p>
-              )}
-              
-              {/* Goal Info */}
-              <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-                <div className="flex items-center gap-1">
-                  <span>{goal.keyResults?.length || 0}</span>
-                  <span>Key Results</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>{getTotalMetricsCount()}</span>
-                  <span>Metrics</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>{goal.progress || 0}%</span>
-                  <span>Complete</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {isExpanded && childGoals.length > 0 && (
-        <div className="space-y-4">
-          {childGoals.map((childGoal) => (
-            <GoalItem
-              key={childGoal.id}
-              goal={childGoal}
-              level={level + 1}
-              timeframe={timeframe}
-              onAddSubgoal={onAddSubgoal}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export function GoalsList({ goals, timeframe, onAddGoal, isLoading }: GoalsListProps) {
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600" />
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
+            <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
+            <div className="h-4 bg-gray-200 rounded w-1/2" />
+          </Card>
+        ))}
       </div>
     )
   }
 
   if (goals.length === 0) {
     return (
-      <div className="text-center py-12">
-        <h3 className="text-sm font-semibold text-gray-900">No goals yet</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Get started by creating a new {timeframe} goal.
-        </p>
-        {onAddGoal && (
-          <div className="mt-6">
-            <Button
-              onClick={() => onAddGoal()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Plus className="mr-2 h-4 w-4" /> New Goal
-            </Button>
-          </div>
-        )}
-      </div>
+      <Card className="p-12 text-center">
+        <h3 className="text-lg font-medium mb-2">No goals found</h3>
+        <p className="text-muted-foreground mb-6">Get started by creating your first goal</p>
+        <Link href={`/dashboard/goals/new/${timeframe}`}>
+          <Button>Create {timeframe} Goal</Button>
+        </Link>
+      </Card>
     )
   }
 
-  // Organize goals into a hierarchy
-  const topLevelGoals = goals.filter((goal) => !goal.parentGoalId)
-  const childGoalsMap = goals.reduce((acc, goal) => {
-    if (goal.parentGoalId) {
-      if (!acc[goal.parentGoalId]) {
-        acc[goal.parentGoalId] = []
-      }
-      acc[goal.parentGoalId].push(goal)
-    }
-    return acc
-  }, {} as Record<string, Goal[]>)
+  const getTotalMetricsCount = (goal: Goal) => {
+    const topLevelMetrics = goal.metrics?.length || 0
+    const keyResultMetrics = goal.keyResults?.reduce((total, kr) => total + (kr.metrics?.length || 0), 0) || 0
+    return topLevelMetrics + keyResultMetrics
+  }
 
   return (
     <div className="space-y-4">
-      {topLevelGoals.map((goal) => (
-        <GoalItem
-          key={goal.id}
-          goal={goal}
-          level={0}
-          timeframe={timeframe}
-          onAddSubgoal={onAddGoal}
-          childGoals={childGoalsMap[goal.id] || []}
-        />
+      {goals.map((goal) => (
+        <Link 
+          key={goal.id} 
+          href={`/dashboard/goals/${goal.timeframe}/${goal.id}`}
+        >
+          <Card className="p-6 hover:bg-muted/50 transition-colors">
+            <div className="flex items-start justify-between">
+              <div className="space-y-4 flex-1">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold">{goal.title}</h3>
+                    <Badge variant="secondary" className="capitalize">{goal.type}</Badge>
+                  </div>
+                  <p className="text-muted-foreground line-clamp-2">{goal.description}</p>
+                </div>
+
+                <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span>{new Date(goal.startDate).toLocaleDateString()} - {new Date(goal.endDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Flag className="h-4 w-4" />
+                    <span className="capitalize">{goal.priority} Priority</span>
+                  </div>
+                  {goal.assignees?.length > 0 && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Users2 className="h-4 w-4" />
+                      <span>{goal.assignees.length} Assignees</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Target className="h-4 w-4" />
+                    <span>{getTotalMetricsCount(goal)} Metrics</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Progress value={goal.progress || 0} className="h-2" />
+                  </div>
+                  <span className="text-sm font-medium">{goal.progress || 0}%</span>
+                </div>
+              </div>
+
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </Card>
+        </Link>
       ))}
     </div>
   )

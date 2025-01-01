@@ -1,12 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { QuarterlyGoalForm } from '@/components/goals'
+import { AnnualGoalForm } from '@/components/goals'
 import { Dashboard } from '@/components/dashboard/Dashboard'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 
-export default function NewQuarterlyGoalPage() {
+export default function NewAnnualGoalPage() {
   const router = useRouter()
 
   const handleSuccess = () => {
@@ -28,15 +28,15 @@ export default function NewQuarterlyGoalPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Goals
               </Button>
-              <h1 className="text-2xl font-semibold tracking-tight">Create Quarterly Goal</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Create Annual Goal</h1>
               <p className="text-sm text-muted-foreground">
-                Set your quarterly objectives that align with annual goals.
+                Set your organization's annual objectives and key results.
               </p>
             </div>
           </div>
 
           <div className="border rounded-lg p-6">
-            <QuarterlyGoalForm mode="create" onSuccess={handleSuccess} />
+            <AnnualGoalForm mode="create" onSuccess={handleSuccess} />
           </div>
         </div>
       </div>

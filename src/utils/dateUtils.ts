@@ -1,90 +1,86 @@
-import { addMonths, startOfQuarter, endOfQuarter, format } from 'date-fns'
+import { format, addMonths, startOfQuarter, endOfQuarter, startOfMonth, endOfMonth } from 'date-fns'
 
-export function getFiscalYearInfo() {
-  const currentDate = new Date()
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth()
-  
-  // For planning purposes, we consider the fiscal year to be the next year
-  // if we're in Q4 (months 9-11, Oct-Dec)
-  const isInQ4 = currentMonth >= 9
-  const planningYear = isInQ4 ? currentYear + 1 : currentYear
-  
-  return {
-    year: planningYear,
-    isInQ4
-  }
+interface QuarterInfo {
+  startDate: Date
+  endDate: Date
+  months: Array<{
+    label: string
+    date: Date
+  }>
 }
 
-export function getQuarterInfo(quarter: number, year: number) {
-  // Calculate quarter dates
-  const quarterStart = startOfQuarter(new Date(year, (quarter - 1) * 3, 1))
-  const quarterEnd = endOfQuarter(quarterStart)
-
-  // Generate monthly milestones for the quarter
-  const months = Array.from({ length: 3 }, (_, i) => {
-    const date = addMonths(quarterStart, i)
-    return {
-      label: format(date, 'MMMM'),
-      date: endOfQuarter(date)
-    }
-  })
-
-  return {
-    startDate: quarterStart,
-    endDate: quarterEnd,
-    months
-  }
-}
-
-export function getCurrentQuarter() {
-  const currentDate = new Date()
-  const currentMonth = currentDate.getMonth()
-  return Math.floor(currentMonth / 3) + 1
-}
-
-export function getQuarterLabel(quarter: number) {
-  return `Q${quarter}`
-}
-
-export function getQuarterRange(quarter: number, year: number) {
-  const { startDate, endDate } = getQuarterInfo(quarter, year)
-  return `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`
-}
-
-interface QuarterOption {
+interface AvailableQuarter {
   quarter: number
   year: number
   label: string
   range: string
 }
 
-export function getAvailableQuarters(): QuarterOption[] {
-  const currentDate = new Date()
-  const currentQuarter = getCurrentQuarter()
-  const currentYear = currentDate.getFullYear()
-  const quarters: QuarterOption[] = []
+export function getFiscalYearInfo() {
+  const currentYear = 2025
+  return {
+    planningYear: currentYear,
+    startDate: new Date(currentYear, 0, 1), // January 1st
+    endDate: new Date(currentYear, 11, 31), // December 31st
+  }
+}
 
-  // Start with current quarter
-  let quarter = currentQuarter
-  let year = currentYear
+export function getQuarterInfo(quarter: number, year: number): QuarterInfo {
+  // Calculate the start month of the quarter (0-based)
+  const startMonth = (quarter - 1) * 3
+  const startDate = new Date(year, startMonth, 1)
+  const endDate = endOfQuarter(startDate)
 
-  // Generate 6 quarters (current + 5 future)
-  for (let i = 0; i < 6; i++) {
-    quarters.push({
-      quarter,
-      year,
-      label: `Q${quarter} ${year}`,
-      range: getQuarterRange(quarter, year)
+  // Generate array of months in the quarter
+  const months = []
+  for (let i = 0; i < 3; i++) {
+    const monthDate = addMonths(startDate, i)
+    const monthEndDate = endOfMonth(monthDate)
+    months.push({
+      label: format(monthDate, 'MMMM'),
+      date: monthEndDate
     })
-
-    // Move to next quarter
-    quarter++
-    if (quarter > 4) {
-      quarter = 1
-      year++
-    }
   }
 
-  return quarters
+  return {
+    startDate,
+    endDate,
+    months
+  }
+}
+
+export function getQuarterRange(quarter: number, year: number): string {
+  const { startDate, endDate } = getQuarterInfo(quarter, year)
+  return `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`
+}
+
+export function getAvailableQuarters(): AvailableQuarter[] {
+  const { planningYear } = getFiscalYearInfo()
+  
+  return [
+    {
+      quarter: 1,
+      year: planningYear,
+      label: `Q1 ${planningYear}`,
+      range: getQuarterRange(1, planningYear)
+    },
+    {
+      quarter: 2,
+      year: planningYear,
+      label: `Q2 ${planningYear}`,
+      range: getQuarterRange(2, planningYear)
+    },
+    {
+      quarter: 3,
+      year: planningYear,
+      label: `Q3 ${planningYear}`,
+      range: getQuarterRange(3, planningYear)
+    },
+    {
+      quarter: 4,
+      year: planningYear,
+      label: `Q4 ${planningYear}`,
+      range: getQuarterRange(4, planningYear)
+    }
+  ]
 } 

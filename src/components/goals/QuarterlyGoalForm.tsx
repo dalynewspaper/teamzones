@@ -40,9 +40,10 @@ interface QuarterlyGoalFormProps {
   parentGoalId?: string
   quarter?: number
   year?: number
+  onSuccess?: () => void
 }
 
-export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, quarter, year }: QuarterlyGoalFormProps) {
+export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, quarter, year, onSuccess }: QuarterlyGoalFormProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -152,7 +153,11 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
       })
       return
     }
-    setKeyResults([...keyResults, { description: '', targetDate: '', metrics: [] }])
+    setKeyResults([...keyResults, { 
+      description: '', 
+      targetDate: quarterEnd.toISOString(), // End of the selected quarter
+      metrics: [] 
+    }])
   }
 
   const handleDeleteKeyResult = (index: number) => {
@@ -215,26 +220,30 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         createdBy: initialData?.createdBy || user.uid
       }
 
-      if (mode === 'edit' && initialData?.id) {
+      if (mode === 'edit' && initialData) {
         await updateGoal(initialData.id, goalData)
         toast({
-          title: 'Success',
-          description: 'Goal updated successfully.',
+          title: 'Goal updated',
+          description: 'Your goal has been updated successfully.'
         })
       } else {
         await createGoal(goalData)
         toast({
-          title: 'Success',
-          description: 'Goal created successfully.',
+          title: 'Goal created',
+          description: 'Your new goal has been created successfully.'
         })
       }
 
-      router.push('/dashboard/goals')
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push('/dashboard/goals')
+      }
     } catch (error) {
       console.error('Error saving goal:', error)
       toast({
         title: 'Error',
-        description: 'Failed to save goal. Please try again.',
+        description: `Failed to ${mode === 'edit' ? 'update' : 'create'} goal. Please try again.`,
         variant: 'destructive'
       })
     } finally {

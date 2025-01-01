@@ -29,14 +29,7 @@ export async function deleteGoal(goalId: string): Promise<void> {
 }
 
 export async function getGoal(goalId: string): Promise<Goal | null> {
-  const goalRef = doc(db, 'goals', goalId);
-  const goalSnap = await getDoc(goalRef);
-  
-  if (!goalSnap.exists()) {
-    return null;
-  }
-  
-  return { id: goalSnap.id, ...goalSnap.data() } as Goal;
+  return getGoalById(goalId)
 }
 
 export async function getGoalsByTimeframe(

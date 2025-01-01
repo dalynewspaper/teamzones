@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { AnnualGoalForm, QuarterlyGoalForm } from '@/components/goals'
+import { QuarterlyGoalForm } from '@/components/goals'
 import { Card } from '@/components/ui/card'
 import { Dashboard } from '@/components/dashboard/Dashboard'
 import { getGoalById } from '@/services/goalService'
@@ -10,7 +10,7 @@ import { Goal } from '@/types/goals'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 
-export default function EditGoalPage() {
+export default function EditQuarterlyGoalPage() {
   const router = useRouter()
   const params = useParams()
   const [goal, setGoal] = useState<Goal | null>(null)
@@ -24,6 +24,10 @@ export default function EditGoalPage() {
         setIsLoading(true)
         const fetchedGoal = await getGoalById(params.id)
         if (!fetchedGoal) {
+          router.push('/dashboard/goals')
+          return
+        }
+        if (fetchedGoal.timeframe !== 'quarterly') {
           router.push('/dashboard/goals')
           return
         }
@@ -72,10 +76,6 @@ export default function EditGoalPage() {
     )
   }
 
-  const handleSuccess = () => {
-    router.push(`/dashboard/goals/${goal.timeframe}/${goal.id}`)
-  }
-
   return (
     <Dashboard>
       <div className="flex-1 overflow-auto bg-background">
@@ -86,24 +86,20 @@ export default function EditGoalPage() {
                 variant="ghost"
                 size="sm"
                 className="gap-2"
-                onClick={() => router.push(`/dashboard/goals/${goal.timeframe}/${goal.id}`)}
+                onClick={() => router.push(`/dashboard/goals/quarterly/${goal.id}`)}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back to Goal
               </Button>
-              <h1 className="text-2xl font-semibold tracking-tight">Edit {goal.timeframe} Goal</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Edit Quarterly Goal</h1>
               <p className="text-sm text-muted-foreground">
-                Update your goal, key results, and metrics.
+                Update your quarterly goal, key results, and metrics.
               </p>
             </div>
           </div>
 
           <div className="border rounded-lg p-6">
-            {goal.timeframe === 'annual' ? (
-              <AnnualGoalForm initialData={goal} mode="edit" onSuccess={handleSuccess} />
-            ) : goal.timeframe === 'quarterly' ? (
-              <QuarterlyGoalForm initialData={goal} mode="edit" onSuccess={handleSuccess} />
-            ) : null}
+            <QuarterlyGoalForm initialData={goal} mode="edit" />
           </div>
         </div>
       </div>

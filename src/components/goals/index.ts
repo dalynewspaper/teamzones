@@ -1,3 +1,2 @@
 export { AnnualGoalForm } from './AnnualGoalForm'
-export { QuarterlyGoalForm } from './QuarterlyGoalForm'
-export { NewGoalModal } from './NewGoalModal' 
+export { QuarterlyGoalForm } from './QuarterlyGoalForm' 

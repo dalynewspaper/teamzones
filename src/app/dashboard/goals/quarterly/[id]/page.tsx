@@ -29,7 +29,7 @@ interface GoalPageProps {
   params: Promise<{ id: string }>
 }
 
-export default function GoalPage({ params }: GoalPageProps) {
+export default function QuarterlyGoalPage({ params }: GoalPageProps) {
   const resolvedParams = React.use(params)
   const goalId = resolvedParams.id
   const router = useRouter()
@@ -47,6 +47,10 @@ export default function GoalPage({ params }: GoalPageProps) {
         setIsLoading(true)
         const fetchedGoal = await getGoal(goalId)
         if (!fetchedGoal) {
+          router.push('/dashboard/goals')
+          return
+        }
+        if (fetchedGoal.timeframe !== 'quarterly') {
           router.push('/dashboard/goals')
           return
         }
@@ -127,7 +131,7 @@ export default function GoalPage({ params }: GoalPageProps) {
                 </Button>
               </Link>
               <div className="flex gap-2">
-                <Link href={`/dashboard/goals/${goal.timeframe}/${goal.id}/edit`}>
+                <Link href={`/dashboard/goals/quarterly/${goal.id}/edit`}>
                   <Button variant="outline" size="sm" className="gap-2">
                     <Pencil className="h-4 w-4" />
                     Edit

@@ -43,22 +43,6 @@ export function WeekNavigator() {
           <ChevronRightIcon className="h-4 w-4" />
         </Button>
       </div>
-      
-      <div className="flex items-center space-x-2">
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="h-9"
-        >
-          Weekly Report
-        </Button>
-        <Button 
-          size="sm"
-          className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white h-9"
-        >
-          Set Weekly Goals
-        </Button>
-      </div>
     </div>
   )
 } 

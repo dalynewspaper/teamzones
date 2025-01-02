@@ -20,8 +20,9 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, parseIS
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { TeamMember } from '@/types/firestore'
+import { TeamMember, UserProfile } from '@/types/firestore'
 import { getUserTeams } from '@/services/teamService'
+import { getUserProfile } from '@/services/userService'
 
 interface WeeklyGoalFormProps {
   initialData?: Goal
@@ -29,6 +30,10 @@ interface WeeklyGoalFormProps {
   onSuccess?: () => void
   parentGoalId?: string
   selectedWeek?: Date
+}
+
+interface TeamMemberWithProfile extends TeamMember {
+  profile?: UserProfile;
 }
 
 export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parentGoalId, selectedWeek: propSelectedWeek }: WeeklyGoalFormProps) {
@@ -40,7 +45,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const [monthlyGoals, setMonthlyGoals] = useState<Goal[]>([])
   const [selectedMonthlyGoal, setSelectedMonthlyGoal] = useState<Goal | null>(null)
   const [isLoadingMonthlyGoals, setIsLoadingMonthlyGoals] = useState(true)
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMemberWithProfile[]>([])
   const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(true)
   
   // State for selected week
@@ -54,28 +59,37 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
 
   // Load team members
   useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (!user?.organizationId) return
-
+    async function loadTeamMembers() {
+      if (!user?.organizationId) return;
+      
       try {
-        setIsLoadingTeamMembers(true)
-        const teams = await getUserTeams(user.uid, user.organizationId)
-        const members = teams.flatMap(team => team.members || [])
-        setTeamMembers(members)
+        setIsLoadingTeamMembers(true);
+        const teams = await getUserTeams(user.uid, user.organizationId);
+        const members = teams.flatMap(team => team.members);
+        
+        // Fetch user profiles for each member
+        const membersWithProfiles = await Promise.all(
+          members.map(async (member) => {
+            const profile = await getUserProfile(member.userId);
+            return { ...member, profile: profile || undefined };
+          })
+        );
+        
+        setTeamMembers(membersWithProfiles);
       } catch (error) {
-        console.error('Error loading team members:', error)
+        console.error('Error loading team members:', error);
         toast({
           title: 'Error',
           description: 'Failed to load team members. Please try again.',
           variant: 'destructive'
-        })
+        });
       } finally {
-        setIsLoadingTeamMembers(false)
+        setIsLoadingTeamMembers(false);
       }
     }
-
-    loadTeamMembers()
-  }, [user?.organizationId, user?.uid])
+    
+    loadTeamMembers();
+  }, [user?.organizationId, user?.uid, toast]);
 
   // Update form dates when selected week changes
   useEffect(() => {
@@ -562,15 +576,20 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
             </SelectTrigger>
             <SelectContent>
               {user && (
-                <SelectItem value={user.uid}>
+                <SelectItem key={`user-${user.uid}`} value={user.uid}>
                   {user.displayName || user.email} (Me)
                 </SelectItem>
               )}
-              {teamMembers.map((member) => (
-                <SelectItem key={member.userId} value={member.userId}>
-                  {member.userId}
-                </SelectItem>
-              ))}
+              {teamMembers
+                .filter(member => member.userId !== user?.uid) // Filter out current user
+                .map((member) => (
+                  <SelectItem 
+                    key={`member-${member.userId}`} 
+                    value={member.userId}
+                  >
+                    {member.profile?.displayName || member.profile?.email || member.userId}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

@@ -1,64 +1,50 @@
 'use client'
 
-import { ReactNode } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Users, Plus, LogOut } from 'lucide-react'
+import { WeeklyGoalsKanban } from './WeeklyGoalsKanban'
+import { UpdatesGrid } from './UpdatesGrid'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Video, Target } from 'lucide-react'
 
-interface DashboardContentProps {
-  children: ReactNode
-}
-
-export function DashboardContent({ children }: DashboardContentProps) {
-  const { user, signOut } = useAuth()
-  const router = useRouter()
-
-  const handleSignOut = async () => {
-    try {
-      await signOut()
-      router.push('/signin')
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
-  }
+export function DashboardContent() {
+  const [activeTab, setActiveTab] = useState('updates')
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200">
-        <div className="p-4">
-          <Link href="/dashboard">
-            <h1 className="text-xl font-bold">TeamZones</h1>
-          </Link>
-        </div>
-
-        <nav className="space-y-1 px-3">
-          <Link href="/dashboard/goals">
-            <Button variant="ghost" className="w-full justify-start">
-              <Users className="h-4 w-4 mr-3" />
-              Goals
+    <div className="max-w-7xl w-full mx-auto py-6 px-6">
+      <Tabs defaultValue="updates" className="space-y-6" onValueChange={setActiveTab}>
+        <div className="flex justify-between items-center">
+          <TabsList>
+            <TabsTrigger value="updates" className="flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              Updates
+            </TabsTrigger>
+            <TabsTrigger value="goals" className="flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              Weekly Goals
+            </TabsTrigger>
+          </TabsList>
+          
+          {/* Conditional action button based on active tab */}
+          {activeTab === 'updates' ? (
+            <Button className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white">
+              <Video className="mr-2 h-4 w-4" /> Record Update
             </Button>
-          </Link>
-        </nav>
-
-        <div className="absolute bottom-0 w-64 p-4 border-t border-gray-200">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={handleSignOut}
-          >
-            <LogOut className="h-4 w-4 mr-3" />
-            Sign Out
-          </Button>
+          ) : (
+            <Button className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white">
+              <Target className="mr-2 h-4 w-4" /> Add Goal
+            </Button>
+          )}
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {children}
-      </div>
+        <TabsContent value="updates" className="m-0">
+          <UpdatesGrid />
+        </TabsContent>
+
+        <TabsContent value="goals" className="m-0">
+          <WeeklyGoalsKanban />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 

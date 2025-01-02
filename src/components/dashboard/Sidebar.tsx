@@ -6,8 +6,8 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore'
-import { getUserTeams } from '@/services/teamService'
-import { Team } from '@/types/firestore'
+import { getTeams, createDefaultTeam } from '@/services/teamService'
+import { Team } from '@/types/teams'
 import { useToast } from '@/components/ui/use-toast'
 
 // Enable offline persistence
@@ -85,8 +85,16 @@ export function Sidebar() {
 
     try {
       setIsLoading(true)
-      const userTeams = await getUserTeams(user.uid, user.organizationId)
-      setTeams(userTeams)
+      const userTeams = await getTeams(user.organizationId)
+      
+      // If no teams exist, create a default team
+      if (userTeams.length === 0) {
+        const defaultTeam = await createDefaultTeam(user.organizationId, user.uid)
+        setTeams([defaultTeam])
+      } else {
+        setTeams(userTeams)
+      }
+      
       setError(null)
     } catch (error) {
       console.error('Error loading teams:', error)

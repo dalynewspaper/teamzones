@@ -17,8 +17,8 @@ import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderB
 import { v4 as uuidv4 } from 'uuid'
 import { WeekNavigator } from './WeekNavigator'
 import { useWeek } from '@/contexts/WeekContext'
-import { getUserTeams } from '@/services/teamService'
-import { Team } from '@/types/firestore'
+import { getTeams } from '@/services/teamService'
+import { Team } from '@/types/teams'
 import { EmptyState } from './EmptyState'
 import { NewTeamModal } from './NewTeamModal'
 import { WeeklyGoalsDisplay } from './WeeklyGoalsDisplay'
@@ -68,7 +68,7 @@ export function Dashboard({ children }: DashboardProps) {
   const loadTeams = useCallback(async () => {
     if (!user?.organizationId || !user?.uid) return
     try {
-      const userTeams = await getUserTeams(user.uid, user.organizationId)
+      const userTeams = await getTeams(user.organizationId)
       setTeams(userTeams)
       
       if (userTeams.length > 0 && !activeTeam) {
@@ -78,7 +78,7 @@ export function Dashboard({ children }: DashboardProps) {
     } catch (error) {
       console.error('Error loading teams:', error)
     }
-  }, [user?.organizationId, user?.uid])
+  }, [user?.organizationId, user?.uid, activeTeam])
 
   // Load organization name and teams when component mounts
   useEffect(() => {

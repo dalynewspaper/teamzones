@@ -21,8 +21,9 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { TeamMember, UserProfile } from '@/types/firestore'
-import { getUserTeams } from '@/services/teamService'
+import { getTeams } from '@/services/teamService'
 import { getUserProfile } from '@/services/userService'
+import { Team } from '@/types/teams'
 
 interface WeeklyGoalFormProps {
   initialData?: Goal
@@ -64,14 +65,19 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       
       try {
         setIsLoadingTeamMembers(true);
-        const teams = await getUserTeams(user.uid, user.organizationId);
-        const members = teams.flatMap(team => team.members);
+        const teams = await getTeams(user.organizationId);
+        const members = teams.flatMap(team => team.members.map(member => member.userId)).filter(Boolean);
         
         // Fetch user profiles for each member
         const membersWithProfiles = await Promise.all(
           members.map(async (member) => {
-            const profile = await getUserProfile(member.userId);
-            return { ...member, profile: profile || undefined };
+            const profile = await getUserProfile(member);
+            return {
+              userId: member,
+              role: 'member' as const,
+              joinedAt: new Date().toISOString(),
+              profile: profile || undefined
+            };
           })
         );
         
@@ -117,26 +123,41 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
-    type: initialData?.type || 'team' as GoalType,
+    teams: initialData?.teamRoles || [],
     priority: initialData?.priority || 'high' as GoalPriority,
     startDate: initialData?.startDate?.toISOString().split('T')[0] || defaultStartDate,
     endDate: initialData?.endDate?.toISOString().split('T')[0] || defaultEndDate,
     assignee: initialData?.assignees?.[0]?.userId || user?.uid || '',
-    status: initialData?.status || 'not_started' as GoalStatus
+    status: initialData?.status || 'not_started' as GoalStatus,
+    progress: initialData?.progress || 0
   })
 
-  const [tasks, setTasks] = useState<Partial<GoalMilestone>[]>(
-    initialData?.milestones || [
-      {
-        title: '',
-        description: '',
-        dueDate: new Date(defaultEndDate),
-        status: 'not_started' as GoalStatus
-      }
-    ]
-  )
+  const [teams, setTeams] = useState<Team[]>([])
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false)
 
-  const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
+  // Load teams
+  useEffect(() => {
+    const loadTeams = async () => {
+      if (!user?.organizationId) return
+
+      try {
+        setIsLoadingTeams(true)
+        const teamsData = await getTeams(user.organizationId)
+        setTeams(teamsData)
+      } catch (error) {
+        console.error('Error loading teams:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load teams. Please try again.',
+          variant: 'destructive'
+        })
+      } finally {
+        setIsLoadingTeams(false)
+      }
+    }
+
+    loadTeams()
+  }, [user?.organizationId])
 
   // Load monthly goals
   useEffect(() => {
@@ -173,48 +194,6 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleTaskChange = (index: number, field: keyof GoalMilestone, value: any) => {
-    const newTasks = [...tasks]
-    newTasks[index] = { ...newTasks[index], [field]: value }
-    setTasks(newTasks)
-  }
-
-  const handleDeleteTask = (index: number) => {
-    setTasks(tasks.filter((_, i) => i !== index))
-  }
-
-  const handleAddTask = () => {
-    setTasks(prev => [...prev, {
-      title: '',
-      description: '',
-      dueDate: new Date(formData.endDate),
-      status: 'not_started' as GoalStatus
-    }])
-  }
-
-  const handleMetricChange = (index: number, field: keyof GoalMetric, value: any) => {
-    const newMetrics = [...metrics]
-    if (field === 'target' || field === 'current') {
-      value = value === '' ? 0 : Number(value)
-    }
-    newMetrics[index] = { ...newMetrics[index], [field]: value }
-    setMetrics(newMetrics)
-  }
-
-  const handleDeleteMetric = (index: number) => {
-    setMetrics(metrics.filter((_, i) => i !== index))
-  }
-
-  const handleAddMetric = () => {
-    setMetrics(prev => [...prev, {
-      name: '',
-      target: 0,
-      current: 0,
-      unit: '',
-      frequency: 'weekly'
-    }])
-  }
-
   const handleSubmit = async () => {
     if (!user?.organizationId) return
 
@@ -224,23 +203,17 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       const goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
         title: formData.title,
         description: formData.description,
-        type: formData.type,
+        type: 'team',
         timeframe: 'weekly',
         priority: formData.priority,
         status: formData.status,
-        progress: initialData?.progress || 0,
+        progress: formData.progress,
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
         parentGoalId: selectedMonthlyGoal?.id || initialData?.parentGoalId,
-        metrics: metrics.map((m, i) => ({ 
-          ...m, 
-          id: m.id || `new-metric-${i}` 
-        })) as GoalMetric[],
-        keyResults: [],
-        milestones: tasks.map((t, i) => ({
-          ...t,
-          id: t.id || `new-task-${i}`
-        })) as GoalMilestone[],
+        metrics: [], // No separate metrics
+        keyResults: [], // No key results for weekly goals
+        milestones: [], // No milestones/tasks
         assignees: [{
           userId: formData.assignee,
           role: 'owner',
@@ -249,7 +222,8 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         organizationId: user.organizationId,
         ownerId: initialData?.ownerId || user.uid,
         createdBy: initialData?.createdBy || user.uid,
-        tags: initialData?.tags || []
+        tags: initialData?.tags || [],
+        teamRoles: formData.teams
       }
 
       if (mode === 'edit' && initialData) {
@@ -269,7 +243,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       if (onSuccess) {
         onSuccess()
       } else {
-        router.push('/dashboard/goals')
+        router.push('/dashboard')
       }
     } catch (error) {
       console.error('Error saving goal:', error)
@@ -317,30 +291,9 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         description: suggestions.enhancedDescription || prev.description
       }))
 
-      // Update tasks with AI suggestions
-      if (suggestions.milestones && suggestions.milestones.length > 0) {
-        setTasks(suggestions.milestones.map(m => ({
-          title: m.title,
-          description: m.description,
-          dueDate: new Date(m.dueDate || formData.endDate),
-          status: 'not_started' as GoalStatus
-        })))
-      }
-
-      // Update metrics with AI suggestions
-      if (suggestions.metrics && suggestions.metrics.length > 0) {
-        setMetrics(suggestions.metrics.map(m => ({
-          name: m.name,
-          target: m.target || 0,
-          current: 0,
-          unit: m.unit || '',
-          frequency: 'weekly'
-        })))
-      }
-
       toast({
         title: "Goal enhanced",
-        description: "AI has helped improve your goal description and added suggested tasks and metrics."
+        description: "AI has helped improve your goal description."
       })
     } catch (error) {
       console.error('Error enhancing goal:', error)
@@ -403,7 +356,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       {/* Context Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Weekly Goal Details</Label>
+          <Label className="text-lg font-semibold">Weekly Task</Label>
           <div className="flex items-center space-x-2">
             <TooltipProvider>
               <Tooltip>
@@ -411,7 +364,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
                   <InfoIcon className="h-4 w-4 text-gray-400" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="max-w-xs">Weekly goals should be specific, actionable tasks that contribute to monthly objectives.</p>
+                  <p className="max-w-xs">Weekly tasks should be specific, actionable items that can be completed within the week.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -509,113 +462,81 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         </div>
 
         <div>
-          <Label>Goal Title</Label>
+          <Label>Task</Label>
           <div className="flex gap-2">
             <Input
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
-              placeholder="e.g., Complete draft proposal for sales presentation"
+              placeholder="e.g., Complete user research interviews for new feature"
               className="mt-1"
             />
           </div>
         </div>
 
         <div>
-          <Label>Description & Success Criteria</Label>
+          <Label>Notes</Label>
           <Textarea
             value={formData.description}
             onChange={(e) => handleInputChange('description', e.target.value)}
-            placeholder="Describe what needs to be accomplished and what success looks like"
+            placeholder="Add any relevant notes, success criteria, or additional context"
             className="mt-1 min-h-[100px]"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Goal Type</Label>
-            <Select
-              value={formData.type}
-              onValueChange={(value: GoalType) => handleInputChange('type', value)}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select goal type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="team">Team Goal</SelectItem>
-                <SelectItem value="department">Department Goal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label>Priority Level</Label>
-            <Select
-              value={formData.priority}
-              onValueChange={(value: GoalPriority) => handleInputChange('priority', value)}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">High Priority</SelectItem>
-                <SelectItem value="medium">Medium Priority</SelectItem>
-                <SelectItem value="low">Low Priority</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div>
-          <Label>Assignee</Label>
+        <div className="space-y-2">
+          <Label>Team</Label>
           <Select
-            value={formData.assignee}
-            onValueChange={(value) => handleInputChange('assignee', value)}
+            value={formData.teams[0]?.teamId}
+            onValueChange={(value) => {
+              const newTeams = [{
+                teamId: value,
+                role: 'primary' as const
+              }]
+              handleInputChange('teams', newTeams)
+            }}
           >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select assignee" />
+            <SelectTrigger>
+              <SelectValue placeholder="Select a team" />
             </SelectTrigger>
             <SelectContent>
-              {user && (
-                <SelectItem key={`user-${user.uid}`} value={user.uid}>
-                  {user.displayName || user.email} (Me)
+              {teams.map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.name}
                 </SelectItem>
-              )}
-              {teamMembers
-                .filter(member => member.userId !== user?.uid) // Filter out current user
-                .map((member) => (
-                  <SelectItem 
-                    key={`member-${member.userId}`} 
-                    value={member.userId}
-                  >
-                    {member.profile?.displayName || member.profile?.email || member.userId}
-                  </SelectItem>
-                ))}
+              ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Start Date</Label>
+        <div>
+          <Label>Priority Level</Label>
+          <Select
+            value={formData.priority}
+            onValueChange={(value: GoalPriority) => handleInputChange('priority', value)}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Select priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high">High Priority</SelectItem>
+              <SelectItem value="medium">Medium Priority</SelectItem>
+              <SelectItem value="low">Low Priority</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Progress</Label>
+          <div className="flex items-center gap-4 mt-1">
             <Input
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => handleInputChange('startDate', e.target.value)}
-              className="mt-1"
-              disabled
+              type="number"
+              min="0"
+              max="100"
+              value={formData.progress}
+              onChange={(e) => handleInputChange('progress', parseInt(e.target.value))}
+              className="w-24"
             />
-            <p className="text-xs text-gray-500 mt-1">Week starts on Monday</p>
-          </div>
-          <div>
-            <Label>End Date</Label>
-            <Input
-              type="date"
-              value={formData.endDate}
-              onChange={(e) => handleInputChange('endDate', e.target.value)}
-              className="mt-1"
-              disabled
-            />
-            <p className="text-xs text-gray-500 mt-1">Week ends on Sunday</p>
+            <span className="text-sm text-gray-500">%</span>
           </div>
         </div>
 
@@ -638,167 +559,6 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         </div>
       </div>
 
-      {/* Tasks Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Tasks</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleAddTask}
-          >
-            Add Task
-          </Button>
-        </div>
-        
-        {tasks.map((task, index) => (
-          <Card key={index} className="p-4">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">Task {index + 1}</h4>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteTask(index)}
-                >
-                  <XCircle className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label>Title</Label>
-                  <Input
-                    value={task.title}
-                    onChange={(e) => handleTaskChange(index, 'title', e.target.value)}
-                    placeholder="e.g., Create presentation outline"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Description</Label>
-                  <Textarea
-                    value={task.description}
-                    onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
-                    placeholder="Describe what needs to be done"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Due Date</Label>
-                    <Input
-                      type="date"
-                      value={task.dueDate instanceof Date ? task.dueDate.toISOString().split('T')[0] : ''}
-                      onChange={(e) => handleTaskChange(index, 'dueDate', new Date(e.target.value))}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label>Status</Label>
-                    <Select
-                      value={task.status}
-                      onValueChange={(value: GoalStatus) => handleTaskChange(index, 'status', value)}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="not_started">Not Started</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="at_risk">At Risk</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Progress Metrics Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Progress Metrics</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleAddMetric}
-          >
-            Add Metric
-          </Button>
-        </div>
-
-        {metrics.map((metric, index) => (
-          <Card key={index} className="p-4">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">Metric {index + 1}</h4>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteMetric(index)}
-                >
-                  <XCircle className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Name</Label>
-                  <Input
-                    value={metric.name || ''}
-                    onChange={(e) => handleMetricChange(index, 'name', e.target.value)}
-                    placeholder="e.g., Tasks Completed"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Unit</Label>
-                  <Input
-                    value={metric.unit || ''}
-                    onChange={(e) => handleMetricChange(index, 'unit', e.target.value)}
-                    placeholder="e.g., count, %, hours"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Target</Label>
-                  <Input
-                    type="number"
-                    value={metric.target || 0}
-                    onChange={(e) => handleMetricChange(index, 'target', e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label>Current</Label>
-                  <Input
-                    type="number"
-                    value={metric.current || 0}
-                    onChange={(e) => handleMetricChange(index, 'current', e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
       <div className="flex justify-end space-x-4">
         {mode === 'edit' && (
           <Button
@@ -819,7 +579,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
           onClick={handleSubmit}
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Saving...' : mode === 'edit' ? 'Update Goal' : 'Create Goal'}
+          {isSubmitting ? 'Saving...' : mode === 'edit' ? 'Update Task' : 'Create Task'}
         </Button>
       </div>
     </div>

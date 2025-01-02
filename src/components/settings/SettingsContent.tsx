@@ -12,8 +12,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { db } from '@/lib/firebase'
 import { doc, collection, addDoc, updateDoc, getDoc } from 'firebase/firestore'
 import { getOrganizationSettings } from '@/services/settingsService'
-import { createTeam, getUserTeams, createGeneralTeam } from '@/services/teamService'
-import { Team } from '@/types/firestore'
+import { createTeam, getTeams } from '@/services/teamService'
+import { Team } from '@/types/teams'
 import { TeamManagement } from '@/components/settings/TeamManagement'
 import { MembersTab } from '@/components/settings/MembersTab'
 import { useSearchParams } from 'next/navigation'
@@ -123,7 +123,7 @@ export function SettingsContent() {
       if (!user?.uid || !user?.organizationId) return
 
       try {
-        const userTeams = await getUserTeams(user.uid, user.organizationId)
+        const userTeams = await getTeams(user.organizationId)
         setTeams(userTeams)
       } catch (err) {
         console.error('Error loading teams:', err)
@@ -216,7 +216,18 @@ export function SettingsContent() {
       })
 
       // Create General team
-      await createGeneralTeam(workspaceRef.id, user.uid)
+      await createTeam({
+        name: 'General',
+        description: 'Default team for all workspace members',
+        organizationId: workspaceRef.id,
+        ownerId: user.uid,
+        members: [{
+          userId: user.uid,
+          role: 'admin' as const,
+          joinedAt: new Date().toISOString()
+        }],
+        isDefault: true
+      })
 
       // Update user with organization ID
       const userRef = doc(db, 'users', user.uid)

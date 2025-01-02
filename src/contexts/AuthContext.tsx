@@ -1,12 +1,12 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import { auth, db } from '@/lib/firebase'
 import { User } from 'firebase/auth'
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
 import { MicrosoftAuthProvider } from '@/lib/microsoft-auth'
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, setDoc } from 'firebase/firestore'
-import { createGeneralTeam, getGeneralTeam } from '@/services/teamService'
+import { createDefaultTeam, getGeneralTeam } from '@/services/teamService'
 
 interface ExtendedUser {
   uid: string
@@ -32,6 +32,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ExtendedUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const updateUserState = useCallback(async (firebaseUser: User | null) => {
+    try {
+      if (!firebaseUser) {
+        setUser(null)
+        return
+      }
+
+      // Get user document
+      const userRef = doc(db, 'users', firebaseUser.uid)
+      const userSnap = await getDoc(userRef)
+      let userData = userSnap.exists() ? userSnap.data() : null
+
+      if (!userData?.organizationId) {
+        // New user or no organization - set up workspace
+        await handleUserWorkspace(firebaseUser)
+        // Fetch updated user data
+        const updatedUserSnap = await getDoc(userRef)
+        userData = updatedUserSnap.exists() ? updatedUserSnap.data() : null
+      } else {
+        // Ensure user is in General team
+        const generalTeam = await getGeneralTeam(userData.organizationId)
+        if (generalTeam && !generalTeam.members.some(m => m.userId === firebaseUser.uid)) {
+          await updateDoc(doc(db, `teams/${generalTeam.id}`), {
+            members: [...generalTeam.members, {
+              userId: firebaseUser.uid,
+              role: 'member',
+              joinedAt: new Date().toISOString()
+            }]
+          })
+        }
+      }
+
+      // Set user state once with all data
+      setUser({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        organizationId: userData?.organizationId || null,
+        teams: userData?.teams || [],
+        defaultTeam: userData?.defaultTeam
+      })
+    } catch (error) {
+      console.error('Error updating user state:', error)
+      setUser(null)
+    }
+  }, [])
+
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
 
@@ -39,58 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
           try {
-            if (firebaseUser) {
-              // Get user document
-              const userRef = doc(db, 'users', firebaseUser.uid)
-              const userSnap = await getDoc(userRef)
-              const userData = userSnap.exists() ? userSnap.data() : null
-
-              // If user exists and has organization, use that data
-              if (userData?.organizationId) {
-                // Ensure user is in General team
-                const generalTeam = await getGeneralTeam(userData.organizationId)
-                if (generalTeam && !generalTeam.members.some(m => m.userId === firebaseUser.uid)) {
-                  await updateDoc(doc(db, `organizations/${userData.organizationId}/teams/${generalTeam.id}`), {
-                    members: [...generalTeam.members, {
-                      userId: firebaseUser.uid,
-                      role: 'member',
-                      joinedAt: new Date().toISOString()
-                    }]
-                  })
-                }
-
-                setUser({
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email,
-                  displayName: firebaseUser.displayName,
-                  photoURL: firebaseUser.photoURL,
-                  organizationId: userData.organizationId,
-                  teams: userData.teams || [],
-                  defaultTeam: userData.defaultTeam
-                })
-              } else {
-                // New user or no organization - set up workspace
-                await handleUserWorkspace(firebaseUser)
-                
-                // Fetch updated user data
-                const updatedUserSnap = await getDoc(userRef)
-                const updatedUserData = updatedUserSnap.data()
-                
-                setUser({
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email,
-                  displayName: firebaseUser.displayName,
-                  photoURL: firebaseUser.photoURL,
-                  organizationId: updatedUserData?.organizationId || null,
-                  teams: updatedUserData?.teams || [],
-                  defaultTeam: updatedUserData?.defaultTeam
-                })
-              }
-            } else {
-              setUser(null)
-            }
+            await updateUserState(firebaseUser)
           } catch (error) {
-            console.error('Error fetching user data:', error)
+            console.error('Error in auth state change:', error)
             setUser(null)
           } finally {
             setLoading(false)
@@ -109,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribe()
       }
     }
-  }, [])
+  }, [updateUserState])
 
   const handleUserWorkspace = async (user: User, organizationDetails?: { name: string; domain: string }) => {
     if (!user.email) return
@@ -141,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         organizationId = workspaceDoc.id
 
         // Create General team
-        const generalTeam = await createGeneralTeam(organizationId, user.uid)
+        const generalTeam = await createDefaultTeam(organizationId, user.uid)
         defaultTeamId = generalTeam.id
       } else {
         // Join existing workspace
@@ -160,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const generalTeam = await getGeneralTeam(organizationId)
         if (!generalTeam) {
           // Create General team if it doesn't exist
-          const newGeneralTeam = await createGeneralTeam(organizationId, user.uid)
+          const newGeneralTeam = await createDefaultTeam(organizationId, user.uid)
           defaultTeamId = newGeneralTeam.id
         } else {
           defaultTeamId = generalTeam.id

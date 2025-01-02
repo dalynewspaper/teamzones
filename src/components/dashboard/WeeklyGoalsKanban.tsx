@@ -4,7 +4,9 @@ import { useState, useEffect, ChangeEvent } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWeek } from '@/contexts/WeekContext'
 import { getGoalsByTimeframe, updateGoal } from '@/services/goalService'
+import { getTeams } from '@/services/teamService'
 import { Goal, GoalStatus, GoalAssignee } from '@/types/goals'
+import { Team } from '@/types/teams'
 import { 
   DragDropContext, 
   Droppable, 
@@ -24,6 +26,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlusCircle, Filter, Calendar, AlertCircle, Coffee, Battery, Rocket, Trophy, PartyPopper } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { format } from 'date-fns'
+import { Calendar as CalendarIcon } from 'lucide-react'
 
 interface FirestoreTimestamp {
   seconds: number;
@@ -116,15 +120,120 @@ const EmptyState = ({ status }: { status: GoalStatus }) => {
   )
 }
 
+const getTeamName = (teamId: string): string => {
+  const teams: Record<string, string> = {
+    general: 'General',
+    engineering: 'Engineering Leadership',
+    video: 'Team Video Recording',
+    product: 'Product Design',
+    test: 'Test Team',
+    gtm: 'Go to Market'
+  }
+  return teams[teamId] || teamId
+}
+
+const GoalCard = ({ goal, provided }: { goal: Goal; provided: DraggableProvided }) => {
+  const { user } = useAuth()
+  const assignee = goal.assignees?.[0]
+  const team = goal.teamRoles?.[0]
+
+  return (
+    <div
+      ref={provided.innerRef}
+      {...provided.draggableProps}
+      {...provided.dragHandleProps}
+      className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 hover:shadow-md transition-shadow"
+    >
+      <div className="space-y-4">
+        {/* Title and Priority */}
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-medium flex-1">{goal.title}</h3>
+          <Badge variant={getPriorityVariant(goal.priority)}>
+            {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
+          </Badge>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <span>Progress</span>
+            <span>{goal.progress || 0}%</span>
+          </div>
+          <Progress value={goal.progress || 0} className="h-1" />
+        </div>
+
+        {/* Team and Assignee */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {team && (
+              <Badge variant="outline" className="text-xs">
+                {getTeamName(team.teamId)}
+              </Badge>
+            )}
+          </div>
+          {assignee && (
+            <Avatar className="h-6 w-6">
+              <AvatarFallback>
+                {assignee.userId ? assignee.userId.charAt(0).toUpperCase() : 'U'}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+
+        {/* Due Date */}
+        {goal.endDate && (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <CalendarIcon className="h-3 w-3" />
+            <span>Due {format(goal.endDate, 'MMM d')}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const getPriorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' => {
+  switch (priority) {
+    case 'high':
+      return 'destructive'
+    case 'medium':
+      return 'default'
+    default:
+      return 'secondary'
+  }
+}
+
 export function WeeklyGoalsKanban() {
   const router = useRouter()
   const { user } = useAuth()
   const { currentWeek } = useWeek()
   const [goals, setGoals] = useState<Goal[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterAssignee, setFilterAssignee] = useState<string>('')
   const [filterPriority, setFilterPriority] = useState<string>('')
+
+  // Load teams
+  useEffect(() => {
+    const loadTeams = async () => {
+      if (!user?.organizationId) return
+
+      try {
+        const teamsData = await getTeams(user.organizationId)
+        setTeams(teamsData)
+      } catch (error) {
+        console.error('Error loading teams:', error)
+      }
+    }
+
+    loadTeams()
+  }, [user?.organizationId])
+
+  const getTeamName = (teamId: string): string => {
+    const team = teams.find(t => t.id === teamId)
+    return team?.name || teamId
+  }
 
   useEffect(() => {
     async function loadGoals() {
@@ -133,13 +242,16 @@ export function WeeklyGoalsKanban() {
       try {
         setLoading(true)
         const weeklyGoals = await getGoalsByTimeframe('weekly', user.organizationId)
-        console.log('All weekly goals:', weeklyGoals)
-        console.log('Current week:', currentWeek)
+        
+        // Deduplicate goals using a Map
+        const uniqueGoals = Array.from(
+          new Map(weeklyGoals.map(goal => [goal.id, goal])).values()
+        )
         
         // Filter goals for current week
-        const currentWeekGoals = weeklyGoals.filter(goal => {
+        const currentWeekGoals = uniqueGoals.filter(goal => {
           try {
-            // Safely parse dates using the helper function
+            // Rest of the filtering logic remains the same
             const goalStartDate = parseFirestoreDate(goal.startDate)
             const goalEndDate = parseFirestoreDate(goal.endDate)
             const weekStart = parseFirestoreDate(currentWeek.startDate)
@@ -151,49 +263,16 @@ export function WeeklyGoalsKanban() {
             weekStart.setHours(0, 0, 0, 0)
             weekEnd.setHours(0, 0, 0, 0)
             
-            // Debug logging
-            console.log(`Processing goal: ${goal.title} (${goal.id})`)
-            console.log('Raw dates:', {
-              goalStartDate: goal.startDate,
-              goalEndDate: goal.endDate,
-              weekStart: currentWeek.startDate,
-              weekEnd: currentWeek.endDate
-            })
-            console.log('Parsed dates:', {
-              goalStartDate: goalStartDate.toISOString(),
-              goalEndDate: goalEndDate.toISOString(),
-              weekStart: weekStart.toISOString(),
-              weekEnd: weekEnd.toISOString()
-            })
-            
-            // Check if the goal belongs to the current week
-            const isInWeek = (
+            return (
               goalStartDate.getTime() >= weekStart.getTime() && 
               goalStartDate.getTime() <= weekEnd.getTime()
             )
-            
-            console.log(`Goal "${goal.title}" is in current week:`, isInWeek)
-            console.log('Date comparisons:', {
-              startInRange: goalStartDate.getTime() >= weekStart.getTime() && goalStartDate.getTime() <= weekEnd.getTime(),
-              endInRange: goalEndDate.getTime() >= weekStart.getTime() && goalEndDate.getTime() <= weekEnd.getTime()
-            })
-            
-            return isInWeek
           } catch (error) {
             console.error('Error processing dates for goal:', goal.id, error)
-            console.log('Problematic goal data:', {
-              goalId: goal.id,
-              title: goal.title,
-              startDate: goal.startDate,
-              endDate: goal.endDate,
-              weekStart: currentWeek.startDate,
-              weekEnd: currentWeek.endDate
-            })
             return false
           }
         })
         
-        console.log('Filtered goals for current week:', currentWeekGoals)
         setGoals(currentWeekGoals)
       } catch (error) {
         console.error('Error loading goals:', error)
@@ -251,7 +330,14 @@ export function WeeklyGoalsKanban() {
   });
 
   const getColumnGoals = (status: GoalStatus) => 
-    filteredGoals.filter(goal => goal.status === status)
+    // Ensure unique goals by using a Map before filtering by status
+    Array.from(
+      new Map(
+        filteredGoals
+          .filter(goal => goal.status === status)
+          .map(goal => [goal.id, goal])
+      ).values()
+    )
 
   if (loading) {
     return <div>Loading goals...</div>
@@ -325,69 +411,7 @@ export function WeeklyGoalsKanban() {
                       getColumnGoals(column.id).map((goal, index) => (
                         <Draggable key={goal.id} draggableId={goal.id} index={index}>
                           {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
-                            <Card
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className="mb-3 p-4 bg-white cursor-pointer hover:shadow-md transition-shadow"
-                              onClick={() => router.push(`/goals/${goal.id}`)}
-                            >
-                              <div className="space-y-3">
-                                <div className="flex items-start justify-between">
-                                  <h4 className="font-medium text-sm">{goal.title}</h4>
-                                  <Badge 
-                                    variant={
-                                      goal.priority === 'high' ? 'destructive' : 
-                                      goal.priority === 'medium' ? 'default' : 
-                                      'secondary'
-                                    }
-                                  >
-                                    {goal.priority}
-                                  </Badge>
-                                </div>
-                                
-                                <div className="text-sm text-gray-500 line-clamp-2">
-                                  {goal.description}
-                                </div>
-
-                                <div className="flex items-center justify-between text-sm">
-                                  <div className="flex items-center gap-2">
-                                    {Array.isArray(goal.assignees) && goal.assignees.length > 0 ? (
-                                      goal.assignees.map((assignee: GoalAssignee) => (
-                                        <Avatar key={assignee?.userId || 'unknown'} className="h-6 w-6">
-                                          <AvatarFallback>
-                                            {assignee?.userId ? assignee.userId.charAt(0).toUpperCase() : '?'}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                      ))
-                                    ) : (
-                                      <Avatar className="h-6 w-6">
-                                        <AvatarFallback>?</AvatarFallback>
-                                      </Avatar>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2 text-gray-500">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>
-                                      {goal.endDate ? new Date(goal.endDate).toLocaleDateString() : 'No date'}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {goal.milestones && goal.milestones.length > 0 && (
-                                  <div className="text-sm text-gray-500">
-                                    {goal.milestones.filter(m => m?.status === 'completed').length}/
-                                    {goal.milestones.length} tasks
-                                  </div>
-                                )}
-
-                                <Progress 
-                                  value={typeof goal.progress === 'number' ? goal.progress : 0} 
-                                  className="h-1" 
-                                />
-                              </div>
-                            </Card>
+                            <GoalCard goal={goal} provided={provided} />
                           )}
                         </Draggable>
                       ))

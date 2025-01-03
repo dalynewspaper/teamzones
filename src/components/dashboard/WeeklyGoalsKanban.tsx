@@ -1,11 +1,23 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent } from 'react'
+import React, { useState, useEffect, ChangeEvent, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWeek } from '@/contexts/WeekContext'
 import { getGoalsByTimeframe, updateGoal } from '@/services/goalService'
 import { getTeams } from '@/services/teamService'
-import { Goal, GoalStatus, GoalAssignee } from '@/types/goals'
+import { eventBus } from '@/lib/eventBus'
+import { 
+  Goal, 
+  GoalStatus, 
+  GoalAssignee, 
+  GoalType, 
+  AllGoalTimeframes, 
+  GoalMetric, 
+  KeyResult, 
+  GoalMilestone,
+  GoalPriority,
+  GoalTeamRole
+} from '@/types/goals'
 import { Team } from '@/types/teams'
 import { 
   DragDropContext, 
@@ -24,7 +36,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PlusCircle, Filter, Calendar, AlertCircle, Coffee, Battery, Rocket, Trophy, PartyPopper } from 'lucide-react'
+import { PlusCircle, Filter, Calendar, AlertCircle, Coffee, Battery, Rocket, Trophy, PartyPopper, PencilIcon, PercentIcon, ExpandIcon, ShrinkIcon, FilterIcon, XIcon, MoreHorizontalIcon, MessageSquareIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { format, getISOWeek, startOfWeek, endOfWeek } from 'date-fns'
 import { Calendar as CalendarIcon } from 'lucide-react'
@@ -59,29 +71,189 @@ function parseFirestoreDate(date: any): Date {
   return new Date();
 }
 
+interface SearchProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  value: string
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void
+  className?: string
+  placeholder?: string
+}
+
 // Create a Search component using Input
-function Search({ value, onChange, className, placeholder }: { 
-  value: string; 
-  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  className?: string;
-  placeholder?: string;
-}) {
+const Search = React.forwardRef<HTMLInputElement, SearchProps>((props, ref) => {
   return (
-    <div className={className}>
+    <div className={props.className}>
       <Input
+        ref={ref}
         type="search"
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
+        {...props}
       />
     </div>
   )
+})
+
+Search.displayName = 'Search'
+
+interface WeeklyGoalData {
+  id: string
+  title: string
+  description?: string
+  status: GoalStatus
+  priority: GoalPriority
+  progress?: number
+  assignees?: GoalAssignee[]
+  teamRoles?: GoalTeamRole[]
+  startDate?: Date
+  endDate?: Date
+  organizationId: string
+  ownerId?: string
+  createdBy?: string
+  type?: GoalType
+  timeframe?: AllGoalTimeframes
+  metrics?: GoalMetric[]
+  keyResults?: KeyResult[]
+  milestones?: GoalMilestone[]
+  tags?: string[]
+  recentActivity?: boolean
+  lastViewed?: Date
+  comments?: number
+  reactions?: { [key: string]: string[] }
+}
+
+interface GoalCardProps {
+  goal: WeeklyGoalData
+  provided: DraggableProvided
+  isSelected?: boolean
+  onSelect?: (selected: boolean) => void
+}
+
+const GoalCard = ({ goal, provided, isSelected, onSelect }: GoalCardProps) => {
+  const { user } = useAuth()
+  const router = useRouter()
+  const assignee = goal.assignees?.[0]
+  const team = goal.teamRoles?.[0]
+  const endDate = goal.endDate ? parseFirestoreDate(goal.endDate) : null
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.defaultPrevented) return
+    router.push(`/dashboard/goals/weekly/${goal.id}`)
+  }
+
+  return (
+    <div
+      ref={provided.innerRef}
+      {...provided.draggableProps}
+      {...provided.dragHandleProps}
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`group relative bg-white hover:bg-gray-50/80 rounded-md p-3
+        transition-all duration-150 cursor-pointer border border-transparent
+        ${isHovered ? 'border-gray-200' : ''}
+      `}
+    >
+      {/* Title Row */}
+      <div className="flex items-start gap-2 mb-1.5">
+        {/* Priority Dot */}
+        <div className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0
+          ${goal.priority === 'high' ? 'bg-red-500' : 
+            goal.priority === 'medium' ? 'bg-yellow-500' : 
+            'bg-green-500'}
+        `} />
+        
+        {/* Title */}
+        <h3 className="text-sm flex-1 text-gray-900">
+          {goal.title}
+        </h3>
+
+        {/* Hover Actions */}
+        {isHovered && (
+          <div className="flex items-center gap-0.5">
+            <button className="p-1 rounded hover:bg-gray-100/80 text-gray-400 hover:text-gray-600">
+              <PencilIcon className="h-3 w-3" />
+            </button>
+            <button className="p-1 rounded hover:bg-gray-100/80 text-gray-400 hover:text-gray-600">
+              <MoreHorizontalIcon className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      {goal.description && (
+        <div className="pl-3.5 mb-2">
+          <p className="text-xs text-gray-500 line-clamp-2">
+            {goal.description}
+          </p>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="pl-3.5 flex items-center gap-2 text-xs text-gray-500">
+        {/* Progress */}
+        {typeof goal.progress === 'number' && goal.progress > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full rounded-full bg-gray-400"
+                style={{ width: `${goal.progress}%` }}
+              />
+            </div>
+            <span>{goal.progress}%</span>
+          </div>
+        )}
+
+        {/* Due Date */}
+        {endDate && (
+          <div className="flex items-center gap-1">
+            <CalendarIcon className="h-3 w-3" />
+            <span>{format(endDate, 'MMM d')}</span>
+          </div>
+        )}
+
+        {/* Assignee */}
+        {assignee && (
+          <div className="ml-auto">
+            <Avatar className="h-4 w-4">
+              <AvatarFallback className="text-[8px] bg-gray-200 text-gray-600">
+                {assignee.userId.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        )}
+      </div>
+
+      {/* Comments Indicator */}
+      {goal.comments && goal.comments > 0 && (
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 text-xs text-gray-400">
+          <MessageSquareIcon className="h-3 w-3" />
+          <span>{goal.comments}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const getPriorityVariant = (priority: string): "default" | "destructive" | "secondary" | "outline" => {
+  switch (priority.toLowerCase()) {
+    case 'high':
+      return 'destructive'
+    case 'medium':
+      return 'default'
+    case 'low':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
+interface WeeklyGoalsKanbanProps {
+  onAddClick?: () => void
 }
 
 const COLUMNS: { id: GoalStatus; title: string }[] = [
   { id: 'not_started', title: 'Not Started' },
   { id: 'in_progress', title: 'In Progress' },
-  { id: 'at_risk', title: 'At Risk' },
   { id: 'completed', title: 'Complete' }
 ]
 
@@ -120,6 +292,11 @@ const EmptyState = ({ status }: { status: GoalStatus }) => {
   )
 }
 
+interface Column {
+  id: GoalStatus
+  title: string
+}
+
 const getTeamName = (teamId: string): string => {
   const teams: Record<string, string> = {
     general: 'General',
@@ -132,116 +309,133 @@ const getTeamName = (teamId: string): string => {
   return teams[teamId] || teamId
 }
 
-const GoalCard = ({ goal, provided }: { goal: Goal; provided: DraggableProvided }) => {
-  const { user } = useAuth()
-  const assignee = goal.assignees?.[0]
-  const team = goal.teamRoles?.[0]
-
-  // Parse the end date using the parseFirestoreDate helper
-  const endDate = goal.endDate ? parseFirestoreDate(goal.endDate) : null
-
-  return (
-    <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
-      {...provided.dragHandleProps}
-      className="bg-white rounded-lg shadow-sm p-4 mb-3 border border-gray-200 hover:shadow-md transition-shadow space-y-3"
-    >
-      {/* Header: Title and Priority */}
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium line-clamp-2 flex-1">{goal.title}</h3>
-        <Badge 
-          variant={getPriorityVariant(goal.priority)}
-          className="shrink-0"
-        >
-          {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
-        </Badge>
-      </div>
-
-      {/* Description */}
-      {goal.description && (
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {goal.description}
-        </p>
-      )}
-
-      {/* Progress Bar */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Progress</span>
-          <span>{goal.progress || 0}%</span>
-        </div>
-        <Progress value={goal.progress || 0} className="h-1.5" />
-      </div>
-
-      {/* Footer: Team, Due Date, and Assignee */}
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Team Badge */}
-          {team && (
-            <Badge variant="outline" className="text-xs truncate max-w-[120px]">
-              {getTeamName(team.teamId)}
-            </Badge>
-          )}
-          {/* Due Date */}
-          {endDate && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <CalendarIcon className="h-3 w-3" />
-              <span>{format(endDate, 'MMM d')}</span>
-            </div>
-          )}
-        </div>
-        {/* Assignee Avatar */}
-        {assignee && (
-          <Avatar className="h-6 w-6">
-            <AvatarFallback className="text-xs">
-              {assignee.userId.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const getPriorityVariant = (priority: string): "default" | "destructive" | "secondary" | "outline" => {
-  switch (priority.toLowerCase()) {
-    case 'high':
-      return 'destructive'
-    case 'medium':
-      return 'default'
-    case 'low':
-      return 'secondary'
-    default:
-      return 'outline'
-  }
-}
-
-interface WeeklyGoalsKanbanProps {
-  onAddClick?: () => void
-}
-
 export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { currentWeek } = useWeek()
-  const [goals, setGoals] = useState<Goal[]>([])
+  const [goals, setGoals] = useState<WeeklyGoalData[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterAssignee, setFilterAssignee] = useState<string>('')
   const [filterPriority, setFilterPriority] = useState<string>('')
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [selectedCards, setSelectedCards] = useState<string[]>([])
+  const [isCompact, setIsCompact] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [columns, setColumns] = useState<Column[]>(COLUMNS)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
+    Object.fromEntries(COLUMNS.map((col: Column) => [col.id, 100 / COLUMNS.length]))
+  )
 
-  // Function to trigger a refresh
-  const refreshGoals = () => {
-    setRefreshTrigger(prev => prev + 1);
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Command/Ctrl + K to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+      // Command/Ctrl + N to create new goal
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        onAddClick?.()
+      }
+      // Escape to clear selection
+      if (e.key === 'Escape') {
+        setSelectedCards([])
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [onAddClick])
+
+  const handleColumnResize = (columnId: string, newWidth: number) => {
+    setColumnWidths(prev => ({
+      ...prev,
+      [columnId]: newWidth
+    }))
   }
 
-  useEffect(() => {
-    const intervalId = setInterval(refreshGoals, 5000); // Refresh every 5 seconds
-    return () => clearInterval(intervalId);
-  }, []);
+  // Enhanced filtering
+  const getFilteredGoals = useCallback(() => {
+    return goals.filter(goal => {
+      const matchesSearch = !searchQuery || 
+        goal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        goal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        goal.id.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      const matchesAssignee = !filterAssignee || filterAssignee === 'all' || 
+        (Array.isArray(goal.assignees) && goal.assignees.some(a => a?.userId === filterAssignee))
+      
+      const matchesPriority = !filterPriority || filterPriority === 'all' || 
+        goal.priority === filterPriority
+
+      return matchesSearch && matchesAssignee && matchesPriority
+    })
+  }, [goals, searchQuery, filterAssignee, filterPriority])
+
+  const filteredGoals = getFilteredGoals()
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination || !user?.organizationId) return
+
+    const { source, destination, draggableId } = result
+    
+    // If dropped in a different column, update the goal status
+    if (source.droppableId !== destination.droppableId) {
+      const goal = goals.find(g => g.id === draggableId)
+      if (!goal) return
+
+      try {
+        const updatedGoal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
+          title: goal.title,
+          description: goal.description || '',
+          type: goal.type || 'team',
+          timeframe: goal.timeframe || 'weekly',
+          priority: goal.priority,
+          status: destination.droppableId as GoalStatus,
+          progress: goal.progress || 0,
+          startDate: goal.startDate || new Date(),
+          endDate: goal.endDate || new Date(),
+          metrics: goal.metrics || [],
+          keyResults: goal.keyResults || [],
+          milestones: goal.milestones || [],
+          assignees: goal.assignees || [],
+          organizationId: user.organizationId,
+          ownerId: user.organizationId,
+          createdBy: user.organizationId,
+          tags: goal.tags || [],
+          teamRoles: goal.teamRoles || []
+        }
+
+        // Update goal status in the database
+        await updateGoal(goal.id, updatedGoal)
+
+        // Update local state
+        setGoals(prevGoals => 
+          prevGoals.map(g => 
+            g.id === draggableId 
+              ? { ...g, status: destination.droppableId as GoalStatus }
+              : g
+          )
+        )
+      } catch (error) {
+        console.error('Error updating goal status:', error)
+      }
+    }
+  }
+
+  const getColumnGoals = (status: GoalStatus): WeeklyGoalData[] => {
+    return Array.from(
+      new Map(
+        filteredGoals
+          .filter(goal => goal.status === status)
+          .map(goal => [goal.id, goal])
+      ).values()
+    )
+  }
 
   // Load teams
   useEffect(() => {
@@ -259,175 +453,232 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
     loadTeams()
   }, [user?.organizationId])
 
-  const getTeamName = (teamId: string): string => {
-    const team = teams.find(t => t.id === teamId)
-    return team?.name || teamId
-  }
-
+  // Load goals
   useEffect(() => {
-    async function loadGoals() {
-      const organizationId = user?.organizationId;
-      if (!organizationId) {
-        console.log('Missing required data:', { organizationId });
-        return;
+    const loadGoals = async () => {
+      if (!user?.organizationId) {
+        console.log('Missing required data:', { organizationId: user?.organizationId })
+        return
       }
-      
+
       try {
-        setLoading(true);
-        const today = new Date();
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-        const currentWeekNumber = getISOWeek(today);
-        const currentYear = today.getFullYear();
-        
-        console.log('Fetching goals for:', {
-          timeframe: 'weekly',
-          organizationId,
-          currentWeekNumber,
-          currentYear,
-          startDate: weekStart,
-          endDate: weekEnd
-        });
-        
+        setLoading(true)
+        const today = new Date()
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 })
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+        const currentWeekNumber = getISOWeek(today)
+        const currentYear = today.getFullYear()
+
         const weeklyGoals = await getGoalsByTimeframe(
-          'weekly', 
-          organizationId,
+          'weekly',
+          user.organizationId,
           currentWeekNumber,
           currentYear,
           weekStart,
           weekEnd
-        );
-        
-        console.log('Fetched weekly goals:', weeklyGoals);
-        
-        // Ensure each goal has a status
-        const goalsWithStatus = weeklyGoals.map(goal => ({
-          ...goal,
-          status: goal.status || 'not_started'
-        }));
-        
-        console.log('Goals with status:', goalsWithStatus);
-        setGoals(goalsWithStatus);
-      } catch (error) {
-        console.error('Error loading goals:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadGoals();
-  }, [user?.organizationId, refreshTrigger]);
-
-  const handleDragEnd = async (result: DropResult) => {
-    if (!result.destination) return
-
-    const { source, destination, draggableId } = result
-    
-    // If dropped in a different column, update the goal status
-    if (source.droppableId !== destination.droppableId) {
-      const goal = goals.find(g => g.id === draggableId)
-      if (!goal) return
-
-      try {
-        // Update goal status in the database
-        await updateGoal(goal.id, {
-          ...goal,
-          status: destination.droppableId as GoalStatus
-        })
-
-        // Update local state
-        setGoals(prevGoals => 
-          prevGoals.map(g => 
-            g.id === draggableId 
-              ? { ...g, status: destination.droppableId as GoalStatus }
-              : g
-          )
         )
+
+        // Ensure each goal has required properties
+        const goalsWithDefaults = weeklyGoals.map(goal => ({
+          ...goal,
+          status: goal.status || 'not_started',
+          progress: goal.progress || 0,
+          priority: goal.priority || 'medium',
+          type: goal.type || 'team',
+          timeframe: 'weekly' as const
+        }))
+
+        setGoals(goalsWithDefaults)
       } catch (error) {
-        console.error('Error updating goal status:', error)
+        console.error('Error loading goals:', error)
+      } finally {
+        setLoading(false)
       }
     }
-  }
 
-  const filteredGoals = goals.filter(goal => {
-    const matchesSearch = !searchQuery || 
-      goal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      goal.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesAssignee = !filterAssignee || filterAssignee === 'all' || 
-      (Array.isArray(goal.assignees) && goal.assignees.some(a => a?.userId === filterAssignee));
-    
-    const matchesPriority = !filterPriority || filterPriority === 'all' || 
-      goal.priority === filterPriority;
+    loadGoals()
+  }, [user?.organizationId])
 
-    return matchesSearch && matchesAssignee && matchesPriority;
-  });
+  // Listen for goal updates
+  useEffect(() => {
+    const handleGoalCreated = (newGoal: WeeklyGoalData) => {
+      setGoals(prevGoals => [...prevGoals, newGoal])
+    }
 
-  const getColumnGoals = (status: GoalStatus) => {
-    // Ensure unique goals by using a Map before filtering by status
-    return Array.from(
-      new Map(
-        filteredGoals
-          .filter(goal => goal.status === status)
-          .map(goal => [goal.id, goal])
-      ).values()
-    )
-  }
+    const handleGoalUpdated = (updatedGoal: WeeklyGoalData) => {
+      setGoals(prevGoals => 
+        prevGoals.map(goal => 
+          goal.id === updatedGoal.id ? updatedGoal : goal
+        )
+      )
+    }
 
-  if (loading) {
-    return <div>Loading goals...</div>
+    // Subscribe to events
+    eventBus.on('goalCreated', handleGoalCreated)
+    eventBus.on('goalUpdated', handleGoalUpdated)
+
+    // Cleanup
+    return () => {
+      eventBus.off('goalCreated', handleGoalCreated)
+      eventBus.off('goalUpdated', handleGoalUpdated)
+    }
+  }, [])
+
+  const handleAddClick = (status: GoalStatus) => {
+    onAddClick?.()
+    router.push(`/dashboard/goals/weekly?sheet=new&status=${status}`)
   }
 
   return (
     <div className="space-y-4">
-      {/* Filters and Actions */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="flex items-center gap-4 flex-1">
-          <Search 
-            placeholder="Search goals..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-xs"
-          />
-          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by assignee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Assignees</SelectItem>
-              {/* Add assignee options */}
-            </SelectContent>
-          </Select>
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
-              <SelectItem value="high">High Priority</SelectItem>
-              <SelectItem value="medium">Medium Priority</SelectItem>
-              <SelectItem value="low">Low Priority</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Enhanced Header with Stats */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold">Weekly Goals</h2>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{filteredGoals.length} goals</span>
+            <span>•</span>
+            <span>{filteredGoals.filter(g => g.status === 'completed').length} completed</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsCompact(!isCompact)}
+          >
+            {isCompact ? <ExpandIcon className="h-4 w-4" /> : <ShrinkIcon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <FilterIcon className="h-4 w-4 mr-1" />
+            Filters
+          </Button>
         </div>
       </div>
 
+      {/* Enhanced Filters */}
+      {showFilters && (
+        <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-4">
+          <div className="flex items-center gap-4">
+            <Search 
+              ref={searchInputRef}
+              placeholder="Search goals... (⌘K)" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-xs"
+            />
+            <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Assignees</SelectItem>
+                {/* Add assignee options */}
+              </SelectContent>
+            </Select>
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                <SelectItem value="high">High Priority</SelectItem>
+                <SelectItem value="medium">Medium Priority</SelectItem>
+                <SelectItem value="low">Low Priority</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Active Filters */}
+          {(searchQuery || filterAssignee || filterPriority) && (
+            <div className="flex items-center gap-2">
+              {searchQuery && (
+                <Badge variant="secondary" className="gap-1">
+                  Search: {searchQuery}
+                  <XIcon 
+                    className="h-3 w-3 cursor-pointer" 
+                    onClick={() => setSearchQuery('')}
+                  />
+                </Badge>
+              )}
+              {filterAssignee && filterAssignee !== 'all' && (
+                <Badge variant="secondary" className="gap-1">
+                  Assignee: {filterAssignee}
+                  <XIcon 
+                    className="h-3 w-3 cursor-pointer" 
+                    onClick={() => setFilterAssignee('')}
+                  />
+                </Badge>
+              )}
+              {filterPriority && filterPriority !== 'all' && (
+                <Badge variant="secondary" className="gap-1">
+                  Priority: {filterPriority}
+                  <XIcon 
+                    className="h-3 w-3 cursor-pointer" 
+                    onClick={() => setFilterPriority('')}
+                  />
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bulk Actions */}
+      {selectedCards.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 z-50">
+          <span className="text-sm font-medium px-2">{selectedCards.length} selected</span>
+          <Button variant="outline" size="sm" onClick={() => setSelectedCards([])}>
+            Clear
+          </Button>
+          <Button variant="outline" size="sm">
+            Move to...
+          </Button>
+          <Button variant="outline" size="sm">
+            Assign to...
+          </Button>
+          <Button variant="destructive" size="sm">
+            Delete
+          </Button>
+        </div>
+      )}
+
       {/* Kanban Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-4 gap-4">
-          {COLUMNS.map(column => (
-            <div key={column.id} className="flex flex-col h-full">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium flex items-center gap-2">
-                  {column.title}
-                  <Badge variant="secondary" className="ml-2">
+        <div className="grid grid-cols-3 gap-6" style={{ minHeight: '70vh' }}>
+          {columns.map(column => (
+            <div 
+              key={column.id} 
+              className="flex flex-col rounded-lg p-4 bg-gray-50/80"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`h-2.5 w-2.5 rounded-full
+                      ${column.id === 'not_started' ? 'bg-gray-400' : 
+                        column.id === 'in_progress' ? 'bg-yellow-500' : 
+                        'bg-green-500'}
+                    `} />
+                    <h3 className="font-medium text-sm">
+                      {column.title}
+                    </h3>
+                  </div>
+                  <Badge 
+                    variant="secondary" 
+                    className="text-xs px-1.5 py-0 h-5 bg-white/50 text-gray-600"
+                  >
                     {getColumnGoals(column.id).length}
                   </Badge>
-                </h3>
+                </div>
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  onClick={() => router.push(`/goals/new?status=${column.id}`)}
+                  className="h-8 w-8 p-0 hover:bg-white/50"
+                  onClick={() => handleAddClick(column.id)}
                 >
                   <PlusCircle className="h-4 w-4" />
                 </Button>
@@ -438,7 +689,10 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="flex-1 bg-gray-50 rounded-lg p-3 min-h-[500px]"
+                    className={`flex-1 rounded-lg transition-colors duration-200 min-h-[calc(100vh-300px)] overflow-y-auto
+                      ${snapshot.isDraggingOver ? 'bg-white/50' : ''}
+                      ${isCompact ? 'space-y-2' : 'space-y-3'}
+                    `}
                   >
                     {getColumnGoals(column.id).length === 0 ? (
                       <EmptyState status={column.id} />
@@ -446,7 +700,25 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
                       getColumnGoals(column.id).map((goal, index) => (
                         <Draggable key={goal.id} draggableId={goal.id} index={index}>
                           {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
-                            <GoalCard goal={goal} provided={provided} />
+                            <div
+                              className={`transition-transform duration-200
+                                ${snapshot.isDragging ? 'rotate-[2deg] scale-105 shadow-lg' : ''}
+                                ${isCompact ? 'transform scale-98' : ''}
+                              `}
+                            >
+                              <GoalCard 
+                                goal={goal} 
+                                provided={provided}
+                                isSelected={selectedCards.includes(goal.id)}
+                                onSelect={(selected) => {
+                                  setSelectedCards(prev => 
+                                    selected 
+                                      ? [...prev, goal.id]
+                                      : prev.filter(id => id !== goal.id)
+                                  )
+                                }}
+                              />
+                            </div>
                           )}
                         </Draggable>
                       ))

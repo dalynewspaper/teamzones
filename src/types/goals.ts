@@ -29,16 +29,15 @@ export interface GoalMilestone {
   description?: string
 }
 
-export interface GoalAlignment {
-  parentGoalId: string
-  contribution: string // Description of how this goal contributes to parent
-  weight: number // Percentage contribution to parent goal (0-100)
-}
-
 export interface GoalAssignee {
   userId: string
   role: 'owner' | 'contributor' | 'reviewer'
   assignedAt: Date
+}
+
+export interface GoalTeamRole {
+  teamId: string
+  role: 'primary' | 'supporting'
 }
 
 export interface Goal {
@@ -73,10 +72,11 @@ export interface Goal {
   createdAt: Date
   updatedAt: Date
   createdBy: string
-  teamRoles?: {
-    teamId: string
-    role: 'primary' | 'supporting'
-  }[]
+  teamRoles?: GoalTeamRole[]
+  recentActivity?: boolean
+  lastViewed?: Date
+  comments?: number
+  reactions?: { [key: string]: string[] }
 }
 
 export interface ExistingGoalContent {

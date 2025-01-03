@@ -34,6 +34,7 @@ import {
 import { Check, ChevronsUpDown } from "lucide-react"
 import { MultiSelect } from "@/components/ui/multi-select"
 import { MultiCombobox } from "@/components/ui/multi-combobox"
+import { eventBus } from '@/lib/eventBus'
 
 interface WeeklyGoalFormProps {
   mode: 'create' | 'edit'
@@ -237,10 +238,7 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
       role: 'contributor' as const,
       assignedAt: new Date()
     }))
-    setFormData(prev => ({
-      ...prev,
-      assignees: newAssignees
-    }))
+    handleInputChange('assignees', newAssignees)
   }
 
   const handleSubmit = async (data: FormData) => {
@@ -256,95 +254,57 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
     try {
       setIsSubmitting(true)
 
-      // Validate required fields
-      if (!data.title) {
-        toast({
-          title: 'Error',
-          description: 'Title is required',
-          variant: 'destructive'
-        })
-        return
-      }
-
-      if (!data.teams.length) {
-        toast({
-          title: 'Error',
-          description: 'Team selection is required',
-          variant: 'destructive'
-        })
-        return
-      }
-
-      // Get the calendar week and year
-      const calendarWeek = getISOWeek(selectedWeek)
-      const year = selectedWeek.getFullYear()
-
-      // Prepare base goal data with required fields
-      const baseGoalData = {
-        title: data.title.trim(),
-        description: data.description?.trim() || '',
-        type: 'team' as const,
-        timeframe: 'weekly' as const,
-        priority: data.priority || 'medium',
-        status: 'not_started' as const,
-        progress: data.progress || 0,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+      const goalData = {
+        title: data.title,
+        description: data.description,
+        type: 'team' as GoalType,
+        timeframe: 'weekly' as GoalTimeframe,
+        priority: data.priority,
+        status: data.status,
+        progress: data.progress,
+        startDate: parseISO(data.startDate),
+        endDate: parseISO(data.endDate),
         calendarWeek,
         year,
-        metrics: [] as GoalMetric[],
+        metrics: [],
         keyResults: [],
-        milestones: [] as GoalMilestone[],
+        milestones: [],
         assignees: data.assignees,
         organizationId: user.organizationId,
         ownerId: user.uid,
-        createdBy: user.uid,
+        teamRoles: data.teams,
         tags: [],
-        teamRoles: data.teams
+        createdBy: user.uid,
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
 
-      // Create goal data with optional fields
-      const goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
-        ...baseGoalData,
-        ...(selectedMonthlyGoal?.id || initialData?.parentGoalId ? {
-          parentGoalId: selectedMonthlyGoal?.id || initialData?.parentGoalId
-        } : {}),
-        ...(data.teams[0]?.teamId ? {
-          teamId: data.teams[0].teamId
-        } : {}),
-        ...(data.departmentId ? {
-          departmentId: data.departmentId
-        } : {}),
-        ...(data.lastCheckin ? {
-          lastCheckin: data.lastCheckin
-        } : {})
-      }
-
-      console.log('Saving goal with data:', goalData)
-
-      if (mode === 'edit' && initialData) {
-        await updateGoal(initialData.id, goalData)
+      if (mode === 'create') {
+        const newGoal = await createGoal(goalData)
+        // Emit event for new goal
+        eventBus.emit('goalCreated', newGoal)
         toast({
-          title: 'Goal updated',
-          description: 'Your weekly goal has been updated successfully.'
+          title: 'Success',
+          description: 'Weekly goal created successfully.'
         })
-      } else {
-        const goalId = await createGoal(goalData)
-        console.log('Created goal with ID:', goalId)
+      } else if (initialData?.id) {
+        const updatedGoal = await updateGoal(initialData.id, goalData)
+        // Emit event for updated goal
+        eventBus.emit('goalUpdated', updatedGoal)
         toast({
-          title: 'Goal created',
-          description: 'Your new weekly goal has been created successfully.'
+          title: 'Success',
+          description: 'Weekly goal updated successfully.'
         })
       }
 
-      if (onComplete) {
-        onComplete()
-      }
+      // Close the form and redirect
+      onComplete?.()
+      router.push('/dashboard/goals/weekly')
     } catch (error) {
       console.error('Error saving goal:', error)
       toast({
         title: 'Error',
-        description: `Failed to ${mode === 'edit' ? 'update' : 'create'} goal. Please try again.`,
+        description: 'Failed to save goal. Please try again.',
         variant: 'destructive'
       })
     } finally {
@@ -453,25 +413,34 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
     return (
       <div className="space-y-2">
         <Label>Assignee(s)</Label>
-        <MultiCombobox
-          options={teamMembers.map(member => ({
-            label: member.profile?.displayName || member.userId,
-            value: member.userId
-          }))}
-          selected={formData.assignees.map(a => a.userId)}
-          onChange={(selected) => {
-            const newAssignees = selected.map(userId => ({
-              userId,
+        <Select
+          value={formData.assignees[0]?.userId || ''}
+          onValueChange={(value) => {
+            const newAssignees = [{
+              userId: value,
               role: 'contributor' as const,
               assignedAt: new Date()
-            }))
-            setFormData(prev => ({
-              ...prev,
-              assignees: newAssignees
-            }))
+            }]
+            handleInputChange('assignees', newAssignees)
           }}
-          placeholder="Select assignees..."
-        />
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select assignee" />
+          </SelectTrigger>
+          <SelectContent>
+            {teamMembers
+              .filter(member => member.profile)
+              .map((member) => (
+                <SelectItem 
+                  key={member.userId} 
+                  value={member.userId}
+                >
+                  {member.profile?.displayName || member.userId}
+                </SelectItem>
+              ))
+            }
+          </SelectContent>
+        </Select>
       </div>
     )
   }

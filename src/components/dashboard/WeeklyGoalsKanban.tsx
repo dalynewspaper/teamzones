@@ -503,6 +503,8 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
   useEffect(() => {
     const handleGoalCreated = (newGoal: WeeklyGoalData) => {
       setGoals(prevGoals => [...prevGoals, newGoal])
+      // Redirect back to weekly goals view
+      router.push('/dashboard/goals/weekly')
     }
 
     const handleGoalUpdated = (updatedGoal: WeeklyGoalData) => {
@@ -511,6 +513,8 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
           goal.id === updatedGoal.id ? updatedGoal : goal
         )
       )
+      // Redirect back to weekly goals view
+      router.push('/dashboard/goals/weekly')
     }
 
     // Subscribe to events
@@ -522,7 +526,7 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
       eventBus.off('goalCreated', handleGoalCreated)
       eventBus.off('goalUpdated', handleGoalUpdated)
     }
-  }, [])
+  }, [router])
 
   const handleAddClick = (status: GoalStatus) => {
     onAddClick?.()

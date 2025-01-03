@@ -28,6 +28,7 @@
     "admin": "^1.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.0.4",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "firebase": "^11.1.0",

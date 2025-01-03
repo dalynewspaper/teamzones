@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { CheckCircle2, Circle, Clock, AlertTriangle, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { parseISO } from 'date-fns'
+import { getISOWeek } from 'date-fns'
 
 const statusIcons = {
   not_started: <Circle className="h-4 w-4" />,
@@ -62,54 +63,42 @@ export function WeeklyGoalsDisplay() {
 
       try {
         setIsLoading(true)
-        const weeklyGoals = await getGoalsByTimeframe('weekly', user.organizationId)
-        console.log('All weekly goals:', weeklyGoals)
-        console.log('Current week:', currentWeek)
+        const currentWeekNumber = getISOWeek(new Date(currentWeek.startDate))
+        const currentYear = new Date(currentWeek.startDate).getFullYear()
         
-        // Filter goals for current week
-        const currentWeekGoals = weeklyGoals.filter(goal => {
-          try {
-            // Safely parse dates
-            const goalStartDate = parseDate(goal.startDate)
-            const goalEndDate = parseDate(goal.endDate)
-            const weekStart = parseDate(currentWeek.startDate)
-            const weekEnd = parseDate(currentWeek.endDate)
-            
-            // Debug logging
-            console.log('Goal dates:', {
-              goalId: goal.id,
-              title: goal.title,
-              startDate: goalStartDate.toISOString(),
-              endDate: goalEndDate.toISOString(),
-              weekStart: weekStart.toISOString(),
-              weekEnd: weekEnd.toISOString()
-            })
-            
-            // Check if the goal overlaps with the current week
-            const isInWeek = (
-              (goalStartDate <= weekEnd && goalStartDate >= weekStart) || // Goal starts in week
-              (goalEndDate >= weekStart && goalEndDate <= weekEnd) || // Goal ends in week
-              (goalStartDate <= weekStart && goalEndDate >= weekEnd) // Goal spans week
-            )
-
-            console.log('Is goal in week:', isInWeek)
-            return isInWeek
-          } catch (error) {
-            console.error('Error processing dates for goal:', goal.id, error)
-            // Log the actual goal data for debugging
-            console.log('Problematic goal data:', {
-              goalId: goal.id,
-              startDate: goal.startDate,
-              endDate: goal.endDate,
-              weekStart: currentWeek.startDate,
-              weekEnd: currentWeek.endDate
-            })
-            return false
-          }
+        console.log('Fetching goals for:', {
+          currentWeekNumber,
+          currentYear,
+          currentWeek,
+          startDate: new Date(currentWeek.startDate),
+          endDate: new Date(currentWeek.endDate)
         })
         
-        console.log('Filtered goals for current week:', currentWeekGoals)
-        setGoals(currentWeekGoals)
+        const weeklyGoals = await getGoalsByTimeframe(
+          'weekly', 
+          user.organizationId,
+          currentWeekNumber,
+          currentYear,
+          new Date(currentWeek.startDate),
+          new Date(currentWeek.endDate)
+        )
+        
+        console.log('Fetched weekly goals:', weeklyGoals)
+        
+        // Deduplicate goals using a Map
+        const uniqueGoals = Array.from(
+          new Map(weeklyGoals.map(goal => [goal.id, goal])).values()
+        )
+        
+        console.log('Unique goals:', uniqueGoals)
+        
+        // Ensure each goal has a status
+        const goalsWithStatus = uniqueGoals.map(goal => ({
+          ...goal,
+          status: goal.status || 'not_started'
+        }))
+        
+        setGoals(goalsWithStatus)
       } catch (error) {
         console.error('Error loading weekly goals:', error)
       } finally {

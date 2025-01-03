@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle, Target, BarChart3, Activity } from 'lucide-react'
+import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle, Target, BarChart3, Activity, ListTodo, MessageSquare, BarChart } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
@@ -329,6 +329,16 @@ export function Dashboard({ children }: DashboardProps) {
     // You could show a toast or error message here
   }
 
+  const navigation = [
+    { name: 'Home', href: '/dashboard', icon: Home },
+    { name: 'Strategic Goals', href: '/dashboard/goals', icon: Target },
+    { name: 'Weekly Goals', href: '/dashboard/goals/weekly', icon: ListTodo },
+    { name: 'My Updates', href: '/dashboard/updates', icon: MessageSquare },
+    { name: 'Insights', href: '/dashboard/insights', icon: BarChart },
+    { name: 'Activity', href: '/dashboard/activity', icon: Activity },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings }
+  ]
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar - fixed */}
@@ -358,42 +368,14 @@ export function Dashboard({ children }: DashboardProps) {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Home className="h-4 w-4 mr-3" />
-              Home
-            </Button>
-          </Link>
-          <Link href="/dashboard/goals">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Target className="h-4 w-4 mr-3" />
-              Goals
-            </Button>
-          </Link>
-          <Link href="/dashboard/updates">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Video className="h-4 w-4 mr-3" />
-              My Updates
-            </Button>
-          </Link>
-          <Link href="/dashboard/insights">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <BarChart3 className="h-4 w-4 mr-3" />
-              Insights
-            </Button>
-          </Link>
-          <Link href="/dashboard/activity">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Activity className="h-4 w-4 mr-3" />
-              Activity
-            </Button>
-          </Link>
-          <Link href="/dashboard/settings">
-            <Button variant="ghost" className="w-full justify-start text-sm font-medium">
-              <Settings className="h-4 w-4 mr-3" />
-              Settings
-            </Button>
-          </Link>
+          {navigation.map((item) => (
+            <Link key={item.name} href={item.href}>
+              <Button variant="ghost" className="w-full justify-start text-sm font-medium">
+                <item.icon className="h-4 w-4 mr-3" />
+                {item.name}
+              </Button>
+            </Link>
+          ))}
         </nav>
 
         {/* Teams Section */}

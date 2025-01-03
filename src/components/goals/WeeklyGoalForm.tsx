@@ -13,10 +13,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalMilestone } from '@/types/goals'
+import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalMilestone, GoalAssignee } from '@/types/goals'
 import { createGoal, updateGoal, getGoalsByTimeframe, deleteGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, parseISO } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, parseISO, addDays } from 'date-fns'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -24,20 +24,48 @@ import { TeamMember, UserProfile } from '@/types/firestore'
 import { getTeams } from '@/services/teamService'
 import { getUserProfile } from '@/services/userService'
 import { Team } from '@/types/teams'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { MultiSelect } from "@/components/ui/multi-select"
+import { MultiCombobox } from "@/components/ui/multi-combobox"
 
 interface WeeklyGoalFormProps {
+  mode: 'create' | 'edit'
   initialData?: Goal
-  mode?: 'create' | 'edit'
-  onSuccess?: () => void
-  parentGoalId?: string
-  selectedWeek?: Date
+  onComplete?: () => void
 }
 
 interface TeamMemberWithProfile extends TeamMember {
   profile?: UserProfile;
 }
 
-export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parentGoalId, selectedWeek: propSelectedWeek }: WeeklyGoalFormProps) {
+interface FormData {
+  title: string
+  description: string
+  teams: { teamId: string; role: 'primary' | 'supporting' }[]
+  priority: GoalPriority
+  startDate: string
+  endDate: string
+  status: GoalStatus
+  progress: number
+  assignees: GoalAssignee[]
+  teamId?: string
+  departmentId?: string
+  lastCheckin?: {
+    date: Date
+    status: string
+    blockers?: string[]
+    nextSteps?: string[]
+  }
+}
+
+export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalFormProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -50,7 +78,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(true)
   
   // State for selected week
-  const [selectedWeek, setSelectedWeek] = useState<Date>(propSelectedWeek || new Date())
+  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
   
   // Calculate the start and end dates based on the calendar week
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }) // Start week on Monday
@@ -66,11 +94,15 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
       try {
         setIsLoadingTeamMembers(true);
         const teams = await getTeams(user.organizationId);
-        const members = teams.flatMap(team => team.members.map(member => member.userId)).filter(Boolean);
         
-        // Fetch user profiles for each member
+        // Get unique member IDs across all teams
+        const uniqueMemberIds = Array.from(new Set(
+          teams.flatMap(team => team.members.map(member => member.userId))
+        )).filter(Boolean);
+        
+        // Fetch user profiles for each unique member
         const membersWithProfiles = await Promise.all(
-          members.map(async (member) => {
+          uniqueMemberIds.map(async (member) => {
             const profile = await getUserProfile(member);
             return {
               userId: member,
@@ -120,16 +152,16 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
   const defaultStartDate = format(weekStart, 'yyyy-MM-dd')
   const defaultEndDate = format(weekEnd, 'yyyy-MM-dd')
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
-    teams: initialData?.teamRoles || [],
-    priority: initialData?.priority || 'high' as GoalPriority,
-    startDate: initialData?.startDate?.toISOString().split('T')[0] || defaultStartDate,
-    endDate: initialData?.endDate?.toISOString().split('T')[0] || defaultEndDate,
-    assignee: initialData?.assignees?.[0]?.userId || user?.uid || '',
-    status: initialData?.status || 'not_started' as GoalStatus,
-    progress: initialData?.progress || 0
+    teams: initialData?.teamRoles ? [initialData.teamRoles[0]] : [],
+    priority: initialData?.priority || 'medium',
+    startDate: initialData?.startDate ? format(new Date(initialData.startDate), 'yyyy-MM-dd') : format(selectedWeek, 'yyyy-MM-dd'),
+    endDate: initialData?.endDate ? format(new Date(initialData.endDate), 'yyyy-MM-dd') : format(addDays(selectedWeek, 6), 'yyyy-MM-dd'),
+    status: initialData?.status || 'not_started',
+    progress: initialData?.progress || 0,
+    assignees: initialData?.assignees || []
   })
 
   const [teams, setTeams] = useState<Team[]>([])
@@ -169,8 +201,8 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         const goals = await getGoalsByTimeframe('monthly', user.organizationId)
         setMonthlyGoals(goals)
         
-        if (parentGoalId) {
-          const parentGoal = goals.find(g => g.id === parentGoalId)
+        if (initialData?.parentGoalId) {
+          const parentGoal = goals.find(g => g.id === initialData.parentGoalId)
           if (parentGoal) {
             setSelectedMonthlyGoal(parentGoal)
           }
@@ -188,43 +220,107 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
     }
 
     loadMonthlyGoals()
-  }, [user?.organizationId, parentGoalId])
+  }, [user?.organizationId, initialData?.parentGoalId])
 
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof FormData, value: any) => {
+    console.log(`Updating ${field}:`, value) // Debug log
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
   }
 
-  const handleSubmit = async () => {
-    if (!user?.organizationId) return
+  // Handle assignee selection
+  const handleAssigneeChange = (selectedUserIds: string[]) => {
+    const newAssignees = selectedUserIds.map(userId => ({
+      userId,
+      role: 'contributor' as const,
+      assignedAt: new Date()
+    }))
+    setFormData(prev => ({
+      ...prev,
+      assignees: newAssignees
+    }))
+  }
+
+  const handleSubmit = async (data: FormData) => {
+    if (!user?.organizationId) {
+      toast({
+        title: 'Error',
+        description: 'Organization ID is required. Please ensure you are part of an organization.',
+        variant: 'destructive'
+      })
+      return
+    }
 
     try {
       setIsSubmitting(true)
 
-      const goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
-        title: formData.title,
-        description: formData.description,
-        type: 'team',
-        timeframe: 'weekly',
-        priority: formData.priority,
-        status: formData.status,
-        progress: formData.progress,
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
-        parentGoalId: selectedMonthlyGoal?.id || initialData?.parentGoalId,
-        metrics: [], // No separate metrics
-        keyResults: [], // No key results for weekly goals
-        milestones: [], // No milestones/tasks
-        assignees: [{
-          userId: formData.assignee,
-          role: 'owner',
-          assignedAt: new Date()
-        }],
-        organizationId: user.organizationId,
-        ownerId: initialData?.ownerId || user.uid,
-        createdBy: initialData?.createdBy || user.uid,
-        tags: initialData?.tags || [],
-        teamRoles: formData.teams
+      // Validate required fields
+      if (!data.title) {
+        toast({
+          title: 'Error',
+          description: 'Title is required',
+          variant: 'destructive'
+        })
+        return
       }
+
+      if (!data.teams.length) {
+        toast({
+          title: 'Error',
+          description: 'Team selection is required',
+          variant: 'destructive'
+        })
+        return
+      }
+
+      // Get the calendar week and year
+      const calendarWeek = getISOWeek(selectedWeek)
+      const year = selectedWeek.getFullYear()
+
+      // Prepare base goal data with required fields
+      const baseGoalData = {
+        title: data.title.trim(),
+        description: data.description?.trim() || '',
+        type: 'team' as const,
+        timeframe: 'weekly' as const,
+        priority: data.priority || 'medium',
+        status: 'not_started' as const,
+        progress: data.progress || 0,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        calendarWeek,
+        year,
+        metrics: [] as GoalMetric[],
+        keyResults: [],
+        milestones: [] as GoalMilestone[],
+        assignees: data.assignees,
+        organizationId: user.organizationId,
+        ownerId: user.uid,
+        createdBy: user.uid,
+        tags: [],
+        teamRoles: data.teams
+      }
+
+      // Create goal data with optional fields
+      const goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> = {
+        ...baseGoalData,
+        ...(selectedMonthlyGoal?.id || initialData?.parentGoalId ? {
+          parentGoalId: selectedMonthlyGoal?.id || initialData?.parentGoalId
+        } : {}),
+        ...(data.teams[0]?.teamId ? {
+          teamId: data.teams[0].teamId
+        } : {}),
+        ...(data.departmentId ? {
+          departmentId: data.departmentId
+        } : {}),
+        ...(data.lastCheckin ? {
+          lastCheckin: data.lastCheckin
+        } : {})
+      }
+
+      console.log('Saving goal with data:', goalData)
 
       if (mode === 'edit' && initialData) {
         await updateGoal(initialData.id, goalData)
@@ -233,17 +329,16 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
           description: 'Your weekly goal has been updated successfully.'
         })
       } else {
-        await createGoal(goalData)
+        const goalId = await createGoal(goalData)
+        console.log('Created goal with ID:', goalId)
         toast({
           title: 'Goal created',
           description: 'Your new weekly goal has been created successfully.'
         })
       }
-      
-      if (onSuccess) {
-        onSuccess()
-      } else {
-        router.push('/dashboard')
+
+      if (onComplete) {
+        onComplete()
       }
     } catch (error) {
       console.error('Error saving goal:', error)
@@ -334,8 +429,8 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
         title: 'Goal deleted',
         description: 'Your goal has been deleted successfully.'
       })
-      if (onSuccess) {
-        onSuccess()
+      if (onComplete) {
+        onComplete()
       } else {
         router.push('/dashboard/goals')
       }
@@ -349,6 +444,36 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const [isAssigneesOpen, setIsAssigneesOpen] = useState(false)
+
+  // Render assignee selection
+  const renderAssigneeSelection = () => {
+    return (
+      <div className="space-y-2">
+        <Label>Assignee(s)</Label>
+        <MultiCombobox
+          options={teamMembers.map(member => ({
+            label: member.profile?.displayName || member.userId,
+            value: member.userId
+          }))}
+          selected={formData.assignees.map(a => a.userId)}
+          onChange={(selected) => {
+            const newAssignees = selected.map(userId => ({
+              userId,
+              role: 'contributor' as const,
+              assignedAt: new Date()
+            }))
+            setFormData(prev => ({
+              ...prev,
+              assignees: newAssignees
+            }))
+          }}
+          placeholder="Select assignees..."
+        />
+      </div>
+    )
   }
 
   return (
@@ -483,29 +608,33 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Team</Label>
-          <Select
-            value={formData.teams[0]?.teamId}
-            onValueChange={(value) => {
-              const newTeams = [{
-                teamId: value,
-                role: 'primary' as const
-              }]
-              handleInputChange('teams', newTeams)
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a team" />
-            </SelectTrigger>
-            <SelectContent>
-              {teams.map((team) => (
-                <SelectItem key={team.id} value={team.id}>
-                  {team.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Team</Label>
+            <Select
+              value={formData.teams[0]?.teamId}
+              onValueChange={(value) => {
+                const newTeams = [{
+                  teamId: value,
+                  role: 'primary' as const
+                }]
+                handleInputChange('teams', newTeams)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a team" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    {team.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {renderAssigneeSelection()}
         </div>
 
         <div>
@@ -576,7 +705,7 @@ export function WeeklyGoalForm({ initialData, mode = 'create', onSuccess, parent
           Cancel
         </Button>
         <Button
-          onClick={handleSubmit}
+          onClick={() => handleSubmit(formData)}
           disabled={isSubmitting}
         >
           {isSubmitting ? 'Saving...' : mode === 'edit' ? 'Update Task' : 'Create Task'}

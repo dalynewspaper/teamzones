@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlusCircle, Filter, Calendar, AlertCircle, Coffee, Battery, Rocket, Trophy, PartyPopper } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { format } from 'date-fns'
+import { format, getISOWeek, startOfWeek, endOfWeek } from 'date-fns'
 import { Calendar as CalendarIcon } from 'lucide-react'
 
 interface FirestoreTimestamp {
@@ -137,73 +137,91 @@ const GoalCard = ({ goal, provided }: { goal: Goal; provided: DraggableProvided 
   const assignee = goal.assignees?.[0]
   const team = goal.teamRoles?.[0]
 
+  // Parse the end date using the parseFirestoreDate helper
+  const endDate = goal.endDate ? parseFirestoreDate(goal.endDate) : null
+
   return (
     <div
       ref={provided.innerRef}
       {...provided.draggableProps}
       {...provided.dragHandleProps}
-      className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 hover:shadow-md transition-shadow"
+      className="bg-white rounded-lg shadow-sm p-4 mb-3 border border-gray-200 hover:shadow-md transition-shadow space-y-3"
     >
-      <div className="space-y-4">
-        {/* Title and Priority */}
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-medium flex-1">{goal.title}</h3>
-          <Badge variant={getPriorityVariant(goal.priority)}>
-            {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
-          </Badge>
-        </div>
+      {/* Header: Title and Priority */}
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-medium line-clamp-2 flex-1">{goal.title}</h3>
+        <Badge 
+          variant={getPriorityVariant(goal.priority)}
+          className="shrink-0"
+        >
+          {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
+        </Badge>
+      </div>
 
-        {/* Progress Bar */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>Progress</span>
-            <span>{goal.progress || 0}%</span>
-          </div>
-          <Progress value={goal.progress || 0} className="h-1" />
-        </div>
+      {/* Description */}
+      {goal.description && (
+        <p className="text-sm text-muted-foreground line-clamp-2">
+          {goal.description}
+        </p>
+      )}
 
-        {/* Team and Assignee */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {team && (
-              <Badge variant="outline" className="text-xs">
-                {getTeamName(team.teamId)}
-              </Badge>
-            )}
-          </div>
-          {assignee && (
-            <Avatar className="h-6 w-6">
-              <AvatarFallback>
-                {assignee.userId ? assignee.userId.charAt(0).toUpperCase() : 'U'}
-              </AvatarFallback>
-            </Avatar>
+      {/* Progress Bar */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Progress</span>
+          <span>{goal.progress || 0}%</span>
+        </div>
+        <Progress value={goal.progress || 0} className="h-1.5" />
+      </div>
+
+      {/* Footer: Team, Due Date, and Assignee */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Team Badge */}
+          {team && (
+            <Badge variant="outline" className="text-xs truncate max-w-[120px]">
+              {getTeamName(team.teamId)}
+            </Badge>
+          )}
+          {/* Due Date */}
+          {endDate && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarIcon className="h-3 w-3" />
+              <span>{format(endDate, 'MMM d')}</span>
+            </div>
           )}
         </div>
-
-        {/* Due Date */}
-        {goal.endDate && (
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <CalendarIcon className="h-3 w-3" />
-            <span>Due {format(goal.endDate, 'MMM d')}</span>
-          </div>
+        {/* Assignee Avatar */}
+        {assignee && (
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-xs">
+              {assignee.userId.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
         )}
       </div>
     </div>
   )
 }
 
-const getPriorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' => {
-  switch (priority) {
+const getPriorityVariant = (priority: string): "default" | "destructive" | "secondary" | "outline" => {
+  switch (priority.toLowerCase()) {
     case 'high':
       return 'destructive'
     case 'medium':
       return 'default'
-    default:
+    case 'low':
       return 'secondary'
+    default:
+      return 'outline'
   }
 }
 
-export function WeeklyGoalsKanban() {
+interface WeeklyGoalsKanbanProps {
+  onAddClick?: () => void
+}
+
+export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { currentWeek } = useWeek()
@@ -213,6 +231,17 @@ export function WeeklyGoalsKanban() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterAssignee, setFilterAssignee] = useState<string>('')
   const [filterPriority, setFilterPriority] = useState<string>('')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  // Function to trigger a refresh
+  const refreshGoals = () => {
+    setRefreshTrigger(prev => prev + 1);
+  }
+
+  useEffect(() => {
+    const intervalId = setInterval(refreshGoals, 5000); // Refresh every 5 seconds
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Load teams
   useEffect(() => {
@@ -237,52 +266,57 @@ export function WeeklyGoalsKanban() {
 
   useEffect(() => {
     async function loadGoals() {
-      if (!user?.organizationId || !currentWeek) return
+      const organizationId = user?.organizationId;
+      if (!organizationId) {
+        console.log('Missing required data:', { organizationId });
+        return;
+      }
       
       try {
-        setLoading(true)
-        const weeklyGoals = await getGoalsByTimeframe('weekly', user.organizationId)
+        setLoading(true);
+        const today = new Date();
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+        const currentWeekNumber = getISOWeek(today);
+        const currentYear = today.getFullYear();
         
-        // Deduplicate goals using a Map
-        const uniqueGoals = Array.from(
-          new Map(weeklyGoals.map(goal => [goal.id, goal])).values()
-        )
+        console.log('Fetching goals for:', {
+          timeframe: 'weekly',
+          organizationId,
+          currentWeekNumber,
+          currentYear,
+          startDate: weekStart,
+          endDate: weekEnd
+        });
         
-        // Filter goals for current week
-        const currentWeekGoals = uniqueGoals.filter(goal => {
-          try {
-            // Rest of the filtering logic remains the same
-            const goalStartDate = parseFirestoreDate(goal.startDate)
-            const goalEndDate = parseFirestoreDate(goal.endDate)
-            const weekStart = parseFirestoreDate(currentWeek.startDate)
-            const weekEnd = parseFirestoreDate(currentWeek.endDate)
-            
-            // Set times to midnight for consistent comparison
-            goalStartDate.setHours(0, 0, 0, 0)
-            goalEndDate.setHours(0, 0, 0, 0)
-            weekStart.setHours(0, 0, 0, 0)
-            weekEnd.setHours(0, 0, 0, 0)
-            
-            return (
-              goalStartDate.getTime() >= weekStart.getTime() && 
-              goalStartDate.getTime() <= weekEnd.getTime()
-            )
-          } catch (error) {
-            console.error('Error processing dates for goal:', goal.id, error)
-            return false
-          }
-        })
+        const weeklyGoals = await getGoalsByTimeframe(
+          'weekly', 
+          organizationId,
+          currentWeekNumber,
+          currentYear,
+          weekStart,
+          weekEnd
+        );
         
-        setGoals(currentWeekGoals)
+        console.log('Fetched weekly goals:', weeklyGoals);
+        
+        // Ensure each goal has a status
+        const goalsWithStatus = weeklyGoals.map(goal => ({
+          ...goal,
+          status: goal.status || 'not_started'
+        }));
+        
+        console.log('Goals with status:', goalsWithStatus);
+        setGoals(goalsWithStatus);
       } catch (error) {
-        console.error('Error loading goals:', error)
+        console.error('Error loading goals:', error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    loadGoals()
-  }, [user?.organizationId, currentWeek])
+    loadGoals();
+  }, [user?.organizationId, refreshTrigger]);
 
   const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return
@@ -317,27 +351,28 @@ export function WeeklyGoalsKanban() {
 
   const filteredGoals = goals.filter(goal => {
     const matchesSearch = !searchQuery || 
-      (goal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      goal.description?.toLowerCase().includes(searchQuery.toLowerCase()));
+      goal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      goal.description?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesAssignee = filterAssignee === 'all' || 
+    const matchesAssignee = !filterAssignee || filterAssignee === 'all' || 
       (Array.isArray(goal.assignees) && goal.assignees.some(a => a?.userId === filterAssignee));
     
-    const matchesPriority = filterPriority === 'all' || 
+    const matchesPriority = !filterPriority || filterPriority === 'all' || 
       goal.priority === filterPriority;
 
     return matchesSearch && matchesAssignee && matchesPriority;
   });
 
-  const getColumnGoals = (status: GoalStatus) => 
+  const getColumnGoals = (status: GoalStatus) => {
     // Ensure unique goals by using a Map before filtering by status
-    Array.from(
+    return Array.from(
       new Map(
         filteredGoals
           .filter(goal => goal.status === status)
           .map(goal => [goal.id, goal])
       ).values()
     )
+  }
 
   if (loading) {
     return <div>Loading goals...</div>

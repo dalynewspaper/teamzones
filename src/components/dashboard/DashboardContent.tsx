@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { WeeklyGoalsKanban } from './WeeklyGoalsKanban'
-import { UpdatesGrid } from './UpdatesGrid'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Video, Target } from 'lucide-react'
+import { WeeklyGoalsKanban } from './WeeklyGoalsKanban'
+import { UpdatesGrid } from './UpdatesGrid'
 
 export function DashboardContent() {
   const [activeTab, setActiveTab] = useState('updates')

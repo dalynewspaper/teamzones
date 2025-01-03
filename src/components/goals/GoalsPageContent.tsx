@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { GoalsList } from '@/components/goals/GoalsList'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { GoalTimeframe } from '@/types/goals'
+
+type GoalTimeframe = 'annual' | 'quarterly' | 'monthly'
 
 export function GoalsPageContent() {
   const router = useRouter()
@@ -20,9 +21,9 @@ export function GoalsPageContent() {
       <div className="max-w-7xl mx-auto p-4 space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Goals</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Strategic Goals</h1>
             <p className="text-sm text-muted-foreground">
-              Set and track your organization's goals and objectives
+              Set and track your organization's long-term goals and objectives
             </p>
           </div>
           <Button onClick={handleNewGoal}>

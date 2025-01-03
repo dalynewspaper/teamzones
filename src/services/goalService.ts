@@ -1,6 +1,6 @@
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
-import { Goal, GoalTimeframe, GoalType } from '@/types/goals';
+import { Goal, GoalTimeframe, GoalType, AllGoalTimeframes } from '@/types/goals';
 
 export async function createGoal(goal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const goalsCollection = collection(db, 'goals');
@@ -33,19 +33,60 @@ export async function getGoal(goalId: string): Promise<Goal | null> {
 }
 
 export async function getGoalsByTimeframe(
-  timeframe: GoalTimeframe,
-  organizationId: string
+  timeframe: AllGoalTimeframes,
+  organizationId: string,
+  calendarWeek?: number,
+  year?: number,
+  startDate?: Date,
+  endDate?: Date
 ): Promise<Goal[]> {
   const goalsCollection = collection(db, 'goals');
-  const q = query(
-    goalsCollection,
-    where('timeframe', '==', timeframe),
-    where('organizationId', '==', organizationId),
-    orderBy('createdAt', 'desc')
-  );
+  let goals: Goal[] = [];
+
+  if (timeframe === 'weekly') {
+    const weeklyQuery = query(
+      goalsCollection,
+      where('timeframe', '==', timeframe),
+      where('organizationId', '==', organizationId)
+    );
+    
+    const weeklySnapshot = await getDocs(weeklyQuery);
+    goals = weeklySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+
+    // If calendar week and year are provided, filter by them
+    if (calendarWeek && year) {
+      goals = goals.filter(goal => goal.calendarWeek === calendarWeek && goal.year === year);
+    }
+    // If date range is provided, filter by it
+    else if (startDate && endDate) {
+      goals = goals.filter(goal => {
+        const goalStart = goal.startDate instanceof Date ? goal.startDate : new Date(goal.startDate);
+        const goalEnd = goal.endDate instanceof Date ? goal.endDate : new Date(goal.endDate);
+        return (
+          (goalStart <= endDate && goalStart >= startDate) || // Goal starts in range
+          (goalEnd >= startDate && goalEnd <= endDate) || // Goal ends in range
+          (goalStart <= startDate && goalEnd >= endDate) // Goal spans range
+        );
+      });
+    }
+  } else {
+    // Handle other timeframes (annual, quarterly, monthly)
+    const timeframeQuery = query(
+      goalsCollection,
+      where('timeframe', '==', timeframe),
+      where('organizationId', '==', organizationId)
+    );
+    
+    const snapshot = await getDocs(timeframeQuery);
+    goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+  }
   
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+  // Sort by createdAt client-side
+  return goals.sort((a, b) => {
+    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+    return dateB.getTime() - dateA.getTime();
+  });
 }
 
 export async function getGoalsByType(
@@ -116,7 +157,13 @@ export async function getGoalById(goalId: string): Promise<Goal | null> {
       startDate: goalData.startDate?.toDate() || new Date(),
       endDate: goalData.endDate?.toDate() || new Date(),
       createdAt: goalData.createdAt?.toDate() || new Date(),
-      updatedAt: goalData.updatedAt?.toDate() || null,
+      updatedAt: goalData.updatedAt?.toDate() || new Date(),
+      metrics: goalData.metrics || [],
+      keyResults: goalData.keyResults || [],
+      milestones: goalData.milestones || [],
+      assignees: goalData.assignees || [],
+      tags: goalData.tags || [],
+      teamRoles: goalData.teamRoles || []
     } as Goal
   } catch (error) {
     console.error('Error fetching goal:', error)

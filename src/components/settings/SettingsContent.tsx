@@ -226,7 +226,8 @@ export function SettingsContent() {
           role: 'admin' as const,
           joinedAt: new Date().toISOString()
         }],
-        isDefault: true
+        isDefault: true,
+        visibility: 'public'
       })
 
       // Update user with organization ID
@@ -260,7 +261,8 @@ export function SettingsContent() {
           userId: user.uid,
           role: 'admin',
           joinedAt: now
-        }]
+        }],
+        visibility: 'public'
       })
 
       // Update local state

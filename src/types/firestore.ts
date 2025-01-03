@@ -74,20 +74,32 @@ export interface Organization {
   updatedAt: string
 }
 
-export interface Team {
-  id: string
-  name: string
-  description?: string
-  organizationId: string
-  ownerId: string
-  members: TeamMember[]
-  isDefault?: boolean
-  createdAt: string
-  updatedAt: string
-}
+export type TeamRole = 'admin' | 'lead' | 'member';
+export type TeamVisibility = 'public' | 'private';
 
 export interface TeamMember {
-  userId: string
-  role: 'admin' | 'member'
-  joinedAt: string
+  userId: string;
+  role: TeamRole;
+  joinedAt: string;
+  customRole?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  organizationId: string;
+  ownerId: string;
+  members: TeamMember[];
+  isDefault?: boolean;
+  visibility: TeamVisibility;
+  linkedGoalIds?: string[];
+  metrics?: {
+    completedGoalsCount: number;
+    totalGoalsCount: number;
+    taskCompletionRate: number;
+    lastActivityAt: string;
+  };
+  createdAt: string;
+  updatedAt: string;
 } 

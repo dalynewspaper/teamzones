@@ -1,4 +1,6 @@
-export type GoalTimeframe = 'annual' | 'quarterly' | 'monthly' | 'weekly'
+export type GoalTimeframe = 'annual' | 'quarterly' | 'monthly'
+export type WeeklyGoalTimeframe = 'weekly'
+export type AllGoalTimeframes = GoalTimeframe | WeeklyGoalTimeframe
 export type GoalType = 'company' | 'department' | 'team'
 export type GoalStatus = 'not_started' | 'in_progress' | 'at_risk' | 'completed'
 export type GoalPriority = 'high' | 'medium' | 'low'
@@ -44,12 +46,14 @@ export interface Goal {
   title: string
   description: string
   type: GoalType
-  timeframe: GoalTimeframe
+  timeframe: AllGoalTimeframes
   priority: GoalPriority
   status: GoalStatus
   progress: number
   startDate: Date
   endDate: Date
+  calendarWeek?: number
+  year?: number
   parentGoalId?: string
   metrics: GoalMetric[]
   keyResults: KeyResult[]

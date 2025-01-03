@@ -1,14 +1,17 @@
+'use client'
+
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Home, Video, Target, BarChart3, Activity, Settings, ChevronDown, Plus, Users, WifiOff, RefreshCw, UserPlus } from 'lucide-react'
+import { Home, Target, Users, Settings, ChevronDown, Plus, WifiOff, RefreshCw, UserPlus, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore'
 import { getTeams, createDefaultTeam } from '@/services/teamService'
 import { Team } from '@/types/teams'
 import { useToast } from '@/components/ui/use-toast'
+import { useTeamVisibility } from '@/contexts/TeamVisibilityContext'
 
 // Enable offline persistence
 try {
@@ -23,25 +26,71 @@ try {
   console.warn('Error enabling persistence:', err)
 }
 
-function TeamItem({ team }: { team: Team }) {
+interface TeamItemProps {
+  team: Team;
+  isActive: boolean;
+  isVisible: boolean;
+  onToggleVisibility: (teamId: string) => void;
+}
+
+function TeamItem({ team, isActive, isVisible, onToggleVisibility }: TeamItemProps) {
   return (
-    <div className="flex items-center">
-      <Button
-        variant="ghost"
-        className="w-full justify-start text-sm font-medium h-9 px-2"
+    <Link href={`/dashboard/teams/${team.id}`} className="block">
+      <div className="flex items-center px-3 py-2 hover:bg-gray-50 rounded-md cursor-pointer">
+        <Users className="h-4 w-4 text-gray-500 mr-2" />
+        <span className={`text-sm font-medium flex-1 ${
+          isActive ? 'text-blue-600' : 'text-gray-600'
+        }`}>
+          {team.name}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleVisibility(team.id)
+          }}
+          className="p-1.5 rounded-md hover:bg-gray-100 border border-gray-200"
+        >
+          {isVisible ? (
+            <Eye className="h-3.5 w-3.5 text-blue-500" />
+          ) : (
+            <EyeOff className="h-3.5 w-3.5 text-gray-400" />
+          )}
+        </button>
+      </div>
+    </Link>
+  )
+}
+
+const navigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
+  { name: 'Goals', href: '/dashboard/goals', icon: Target },
+  { name: 'Teams', href: '/dashboard/teams', icon: Users },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+]
+
+function NavigationItem({ item, isActive }: { item: typeof navigation[0], isActive: boolean }) {
+  return (
+    <Link href={item.href}>
+      <Button 
+        variant="ghost" 
+        className={`w-full justify-start text-sm font-medium ${
+          isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
       >
-        <Users className="h-4 w-4 mr-2" />
-        {team.name}
+        <item.icon className="h-4 w-4 mr-3" />
+        {item.name}
       </Button>
-    </div>
+    </Link>
   )
 }
 
 export function Sidebar() {
-  const router = useRouter()
   const pathname = usePathname()
   const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
+  const { isTeamVisible, toggleTeamVisibility } = useTeamVisibility()
   const [organizationName, setOrganizationName] = useState('')
   const [teams, setTeams] = useState<Team[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -81,14 +130,19 @@ export function Sidebar() {
   }, [user?.organizationId])
 
   const loadTeams = useCallback(async () => {
-    if (!user?.uid || !user?.organizationId) return
+    if (!user?.uid || !user?.organizationId) {
+      console.log('No user or organization ID')
+      return
+    }
 
     try {
       setIsLoading(true)
+      console.log('Loading teams for organization:', user.organizationId)
       const userTeams = await getTeams(user.organizationId)
+      console.log('Loaded teams:', userTeams)
       
-      // If no teams exist, create a default team
       if (userTeams.length === 0) {
+        console.log('Creating default team')
         const defaultTeam = await createDefaultTeam(user.organizationId, user.uid)
         setTeams([defaultTeam])
       } else {
@@ -106,6 +160,7 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!authLoading && user) {
+      console.log('Loading teams for user:', user.uid)
       loadOrganization()
       loadTeams()
     }
@@ -135,15 +190,16 @@ export function Sidebar() {
           {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-sm mt-1 text-gray-500 hover:text-gray-900"
-          onClick={() => router.push('/dashboard/settings?tab=members')}
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          Invite Team Members
-        </Button>
+        <Link href="/dashboard/settings?tab=members">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-sm mt-1 text-gray-500 hover:text-gray-900"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Invite Team Members
+          </Button>
+        </Link>
         {isOffline && (
           <div className="flex items-center justify-center gap-2 py-1 px-2 bg-yellow-50 text-yellow-700 text-xs">
             <WifiOff className="h-3 w-3" />
@@ -154,93 +210,26 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        <Link href="/dashboard">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname === '/dashboard' 
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Home className="h-4 w-4 mr-3" />
-            Home
-          </Button>
-        </Link>
-        <Link href="/dashboard/goals">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname.startsWith('/dashboard/goals')
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Target className="h-4 w-4 mr-3" />
-            Goals
-          </Button>
-        </Link>
-        <Link href="/dashboard/updates">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname === '/dashboard/updates'
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Video className="h-4 w-4 mr-3" />
-            My Updates
-          </Button>
-        </Link>
-        <Link href="/dashboard/insights">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname === '/dashboard/insights'
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <BarChart3 className="h-4 w-4 mr-3" />
-            Insights
-          </Button>
-        </Link>
-        <Link href="/dashboard/activity">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname === '/dashboard/activity'
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Activity className="h-4 w-4 mr-3" />
-            Activity
-          </Button>
-        </Link>
-        <Link href="/dashboard/settings">
-          <Button 
-            variant="ghost" 
-            className={`w-full justify-start text-sm font-medium ${
-              pathname === '/dashboard/settings'
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Settings className="h-4 w-4 mr-3" />
-            Settings
-          </Button>
-        </Link>
+        {navigation.map((item) => (
+          <NavigationItem 
+            key={item.name} 
+            item={item} 
+            isActive={pathname === item.href}
+          />
+        ))}
       </nav>
 
       {/* Teams Section */}
       <div className="p-3 border-t border-gray-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-500">TEAMS</h3>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <Plus className="h-4 w-4" />
-          </Button>
+          <h3 className="text-sm font-medium text-gray-500">
+            TEAMS {teams.length > 0 && `(${teams.length})`}
+          </h3>
+          <Link href="/dashboard/settings?tab=members">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </Link>
         </div>
         <div className="space-y-1">
           {error ? (
@@ -258,12 +247,17 @@ export function Sidebar() {
               </Button>
             </div>
           ) : teams.length > 0 ? (
-            teams.map(team => (
-              <TeamItem 
-                key={team.id} 
-                team={team}
-              />
-            ))
+            <>
+              {teams.map(team => (
+                <TeamItem 
+                  key={team.id} 
+                  team={team}
+                  isActive={pathname?.includes(team.id)}
+                  isVisible={isTeamVisible(team.id)}
+                  onToggleVisibility={toggleTeamVisibility}
+                />
+              ))}
+            </>
           ) : (
             <p className="text-sm text-gray-500">
               {isLoading ? 'Loading teams...' : 'No teams available'}

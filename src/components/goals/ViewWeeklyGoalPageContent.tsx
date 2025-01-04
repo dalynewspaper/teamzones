@@ -86,6 +86,7 @@ const formatDate = (date: Date | FirestoreTimestamp | string | null | undefined)
 export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentProps) {
   const [goal, setGoal] = useState<Goal | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'activity'>('overview')
   const router = useRouter()
 
   useEffect(() => {
@@ -110,7 +111,7 @@ export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentP
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-6 max-w-4xl">
+      <div className="container mx-auto py-6 max-w-5xl">
         <div className="flex items-center justify-center min-h-[200px]">
           <div className="text-muted-foreground">Loading...</div>
         </div>
@@ -118,118 +119,249 @@ export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentP
     )
   }
 
-  if (!goal) {
-    return null
-  }
+  if (!goal) return null
+
+  const progress = goal.progress || 0
+  const progressColor = progress >= 75 ? 'bg-green-500' : 
+                       progress >= 50 ? 'bg-blue-500' : 
+                       progress >= 25 ? 'bg-yellow-500' : 
+                       'bg-gray-500'
 
   return (
-    <div className="container mx-auto py-6 max-w-4xl">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold">{goal.title}</h1>
-            <Badge variant="secondary" className="capitalize">{goal.type}</Badge>
-            <Badge variant="outline" className="capitalize">{goal.priority} Priority</Badge>
+    <div className="container mx-auto py-6 max-w-5xl">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-start justify-between mb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight">{goal.title}</h1>
+              <Badge variant="secondary" className="capitalize">{goal.type}</Badge>
+            </div>
+            <p className="text-muted-foreground">{goal.description}</p>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <CalendarIcon className="h-4 w-4" />
-              <span>
-                {format(new Date(goal.startDate), 'MMM d')} - {format(new Date(goal.endDate), 'MMM d, yyyy')}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[goal.status]}`}>
-                {statusIcons[goal.status]}
-                <span className="ml-1 capitalize">{goal.status.replace('_', ' ')}</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.back()}>
+              Back
+            </Button>
+            <Link href={`/dashboard/goals/weekly/${goal.id}/edit`}>
+              <Button variant="default" size="sm">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            </Link>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/dashboard/goals/weekly/${goal.id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Edit className="h-4 w-4 mr-1" />
-              Edit
-            </Button>
-          </Link>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-4 gap-4 mt-6">
+          <Card className="p-4 space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+            <div className="flex items-center gap-2">
+              {statusIcons[goal.status]}
+              <span className="font-semibold capitalize">
+                {goal.status.replace('_', ' ')}
+              </span>
+            </div>
+          </Card>
+
+          <Card className="p-4 space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">Priority</h3>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${
+                goal.priority === 'high' ? 'bg-red-500' :
+                goal.priority === 'medium' ? 'bg-yellow-500' :
+                'bg-green-500'
+              }`} />
+              <span className="font-semibold capitalize">{goal.priority}</span>
+            </div>
+          </Card>
+
+          <Card className="p-4 space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
+            <div className="flex items-center gap-2 font-semibold">
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <span>{format(new Date(goal.startDate), 'MMM d')} - {format(new Date(goal.endDate), 'MMM d')}</span>
+            </div>
+          </Card>
+
+          <Card className="p-4 space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">Progress</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{progress}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${progressColor} transition-all duration-500`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
 
-      <div className="grid gap-6">
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Description</h2>
-          <p className="text-gray-700 whitespace-pre-wrap">{goal.description}</p>
-        </Card>
+      {/* Content Tabs */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 border-b">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'overview' ? 'border-primary text-primary' : 'border-transparent'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('updates')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'updates' ? 'border-primary text-primary' : 'border-transparent'
+            }`}
+          >
+            Updates
+          </button>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'activity' ? 'border-primary text-primary' : 'border-transparent'
+            }`}
+          >
+            Activity
+          </button>
+        </div>
 
-        {goal.metrics.length > 0 && (
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Metrics</h2>
-            <div className="grid gap-4">
-              {goal.metrics.map((metric, index) => (
-                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <h3 className="font-medium">{metric.name}</h3>
-                    <p className="text-sm text-gray-500">Measured {metric.frequency}</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Current</div>
-                      <div className="font-medium">
-                        {metric.current} {metric.unit}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Target</div>
-                      <div className="font-medium">
-                        {metric.target} {metric.unit}
-                      </div>
-                    </div>
-                    <div className="w-24">
-                      <div className="text-sm text-gray-500 mb-1">Progress</div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 rounded-full"
-                          style={{ 
-                            width: `${Math.min(100, (metric.current / metric.target) * 100)}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+        {activeTab === 'overview' && (
+          <div className="grid gap-6">
+            {/* Metrics */}
+            {goal.metrics && goal.metrics.length > 0 && (
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Metrics</h2>
+                  <Button variant="outline" size="sm">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    View Details
+                  </Button>
                 </div>
-              ))}
+                <div className="grid gap-4">
+                  {goal.metrics.map((metric, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-lg">
+                      <div>
+                        <h3 className="font-medium">{metric.name}</h3>
+                        <p className="text-sm text-muted-foreground">Measured {metric.frequency}</p>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">Current</div>
+                          <div className="font-medium">
+                            {metric.current} {metric.unit}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">Target</div>
+                          <div className="font-medium">
+                            {metric.target} {metric.unit}
+                          </div>
+                        </div>
+                        <div className="w-32">
+                          <div className="text-sm text-muted-foreground mb-1">
+                            {Math.round((metric.current / metric.target) * 100)}%
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 transition-all duration-500"
+                              style={{ 
+                                width: `${Math.min(100, (metric.current / metric.target) * 100)}%`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Milestones */}
+            {goal.milestones && goal.milestones.length > 0 && (
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Milestones</h2>
+                  <Button variant="outline" size="sm">Add Milestone</Button>
+                </div>
+                <div className="space-y-4">
+                  {goal.milestones.map((milestone, index) => (
+                    <div key={index} className="flex items-start gap-4 p-4 bg-gray-50/50 rounded-lg">
+                      <div className={`mt-1 ${
+                        milestone.status === 'completed' ? 'text-green-500' :
+                        milestone.status === 'at_risk' ? 'text-yellow-500' :
+                        'text-gray-400'
+                      }`}>
+                        {statusIcons[milestone.status]}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-medium">{milestone.title}</h3>
+                            {milestone.description && (
+                              <p className="text-sm text-muted-foreground mt-1">{milestone.description}</p>
+                            )}
+                          </div>
+                          <Badge variant="outline" className="ml-2">
+                            Due {formatDate(milestone.dueDate)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Team & Assignees */}
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Team & Assignees</h2>
+              <div className="grid gap-4">
+                {goal.assignees && goal.assignees.map((assignee, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        {assignee.userId.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-medium">{assignee.userId}</div>
+                        <div className="text-sm text-muted-foreground capitalize">{assignee.role}</div>
+                      </div>
+                    </div>
+                    <Badge variant="secondary">
+                      {formatDate(assignee.assignedAt)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === 'updates' && (
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold">Progress Updates</h2>
+              <Button>Add Update</Button>
+            </div>
+            <div className="text-center text-muted-foreground py-8">
+              No updates yet. Add your first progress update.
             </div>
           </Card>
         )}
 
-        {goal.milestones.length > 0 && (
+        {activeTab === 'activity' && (
           <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Milestones</h2>
-            <div className="space-y-4">
-              {goal.milestones.map((milestone, index) => {
-                console.log('Milestone data:', milestone, 'Due date:', milestone.dueDate);
-                return (
-                  <div key={index} className="flex items-start gap-4 p-4 border rounded-lg">
-                    <div className={`mt-1 ${
-                      milestone.status === 'completed' ? 'text-green-500' :
-                      milestone.status === 'at_risk' ? 'text-yellow-500' :
-                      'text-gray-400'
-                    }`}>
-                      {statusIcons[milestone.status]}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium">{milestone.title}</h3>
-                      {milestone.description && (
-                        <p className="text-sm text-gray-600 mt-1">{milestone.description}</p>
-                      )}
-                      <div className="text-sm text-gray-500 mt-2">
-                        Due: {formatDate(milestone.dueDate)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold">Activity Log</h2>
+            </div>
+            <div className="text-center text-muted-foreground py-8">
+              No activity recorded yet.
             </div>
           </Card>
         )}

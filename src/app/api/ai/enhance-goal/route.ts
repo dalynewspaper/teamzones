@@ -139,25 +139,24 @@ Please provide:
    - The strategic impact and long-term value
    - Why this goal matters for the organization
    - What success looks like at the end of the year
-3. 2-3 key results that would help achieve this goal, each with 1-2 specific metrics
-4. Each metric should include a specific target number and unit of measurement`
+3. 3-4 key results that would help achieve this goal, with specific metrics for each:
+   - Each key result should directly measure progress toward the goal
+   - Each key result should be quantifiable with a clear metric
+   - Each metric should include a specific target number and unit of measurement
+   - The metrics should be relevant to the goal's focus area (e.g., revenue, product, team performance)
+   - Consider both leading and lagging indicators
+   - Ensure the metrics are measurable on a quarterly basis`
 
       responseFormat = `Format the response in JSON with this structure:
 {
   "enhancedTitle": "string",
   "enhancedDescription": "string",
-  "keyResults": [
+  "metrics": [
     {
-      "description": "string",
-      "targetDate": "string",
-      "metrics": [
-        {
-          "name": "string",
-          "target": number,
-          "unit": "string",
-          "frequency": "quarterly"
-        }
-      ]
+      "name": "string",
+      "target": number,
+      "unit": "string",
+      "frequency": "quarterly"
     }
   ]
 }`

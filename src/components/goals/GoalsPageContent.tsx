@@ -1,19 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { GoalsList } from '@/components/goals/GoalsList'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AnnualGoalSheet } from '@/components/goals/AnnualGoalSheet'
+import { QuarterlyGoalSheet } from '@/components/goals/QuarterlyGoalSheet'
+import { MonthlyGoalSheet } from '@/components/goals/MonthlyGoalSheet'
 
 type GoalTimeframe = 'annual' | 'quarterly' | 'monthly'
 
 export function GoalsPageContent() {
-  const router = useRouter()
   const [selectedTimeframe, setSelectedTimeframe] = useState<GoalTimeframe>('annual')
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false)
 
-  const handleNewGoal = () => {
-    router.push(`/dashboard/goals/new/${selectedTimeframe}`)
+  const handleCloseSheet = () => {
+    setIsCreateSheetOpen(false)
+  }
+
+  const handleCreateClick = () => {
+    setIsCreateSheetOpen(true)
   }
 
   return (
@@ -26,8 +32,8 @@ export function GoalsPageContent() {
               Set and track your organization's long-term goals and objectives
             </p>
           </div>
-          <Button onClick={handleNewGoal}>
-            New {selectedTimeframe} Goal
+          <Button onClick={handleCreateClick}>
+            New {selectedTimeframe.charAt(0).toUpperCase() + selectedTimeframe.slice(1)} Goal
           </Button>
         </div>
 
@@ -38,16 +44,36 @@ export function GoalsPageContent() {
             <TabsTrigger value="monthly">Monthly Goals</TabsTrigger>
           </TabsList>
           <TabsContent value="annual">
-            <GoalsList timeframe="annual" />
+            <GoalsList timeframe="annual" onCreateClick={handleCreateClick} />
           </TabsContent>
           <TabsContent value="quarterly">
-            <GoalsList timeframe="quarterly" />
+            <GoalsList timeframe="quarterly" onCreateClick={handleCreateClick} />
           </TabsContent>
           <TabsContent value="monthly">
-            <GoalsList timeframe="monthly" />
+            <GoalsList timeframe="monthly" onCreateClick={handleCreateClick} />
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Goal Creation Sheets */}
+      {selectedTimeframe === 'annual' && (
+        <AnnualGoalSheet 
+          isOpen={isCreateSheetOpen} 
+          onClose={handleCloseSheet} 
+        />
+      )}
+      {selectedTimeframe === 'quarterly' && (
+        <QuarterlyGoalSheet 
+          isOpen={isCreateSheetOpen} 
+          onClose={handleCloseSheet} 
+        />
+      )}
+      {selectedTimeframe === 'monthly' && (
+        <MonthlyGoalSheet 
+          isOpen={isCreateSheetOpen} 
+          onClose={handleCloseSheet} 
+        />
+      )}
     </div>
   )
 } 

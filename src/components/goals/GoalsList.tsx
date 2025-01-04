@@ -12,12 +12,14 @@ import { ChevronRight, Flag, Target, Calendar, Users2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/utils/dateUtils'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { eventBus } from '@/lib/eventBus'
 
 interface GoalsListProps {
   timeframe: GoalTimeframe
+  onCreateClick: () => void
 }
 
-export function GoalsList({ timeframe }: GoalsListProps) {
+export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
   const { user } = useAuth()
   const { dateFormat } = useOrgSettings()
   const [goals, setGoals] = useState<Goal[]>([])
@@ -41,6 +43,44 @@ export function GoalsList({ timeframe }: GoalsListProps) {
     loadGoals()
   }, [timeframe, user?.organizationId])
 
+  // Subscribe to goal events
+  useEffect(() => {
+    const handleGoalCreated = (newGoal: Goal) => {
+      if (newGoal.timeframe === timeframe) {
+        // Immediately update the state with the new goal
+        setGoals(prevGoals => [...prevGoals, newGoal])
+      }
+    }
+
+    const handleGoalUpdated = (updatedGoal: Goal) => {
+      if (updatedGoal.timeframe === timeframe) {
+        // Immediately update the state with the updated goal
+        setGoals(prevGoals => 
+          prevGoals.map(goal => 
+            goal.id === updatedGoal.id ? updatedGoal : goal
+          )
+        )
+      }
+    }
+
+    const handleGoalDeleted = (goalId: string) => {
+      // Immediately update the state by removing the deleted goal
+      setGoals(prevGoals => prevGoals.filter(goal => goal.id !== goalId))
+    }
+
+    // Subscribe to events
+    eventBus.on('goalCreated', handleGoalCreated)
+    eventBus.on('goalUpdated', handleGoalUpdated)
+    eventBus.on('goalDeleted', handleGoalDeleted)
+
+    // Cleanup
+    return () => {
+      eventBus.off('goalCreated', handleGoalCreated)
+      eventBus.off('goalUpdated', handleGoalUpdated)
+      eventBus.off('goalDeleted', handleGoalDeleted)
+    }
+  }, [timeframe])
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -60,9 +100,9 @@ export function GoalsList({ timeframe }: GoalsListProps) {
       <Card className="p-12 text-center">
         <h3 className="text-lg font-medium mb-2">No goals found</h3>
         <p className="text-muted-foreground mb-6">Get started by creating your first goal</p>
-        <Link href={`/dashboard/goals/${timeframe}/create`}>
-          <Button>Create {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Goal</Button>
-        </Link>
+        <Button onClick={onCreateClick}>
+          Create {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Goal
+        </Button>
       </Card>
     )
   }

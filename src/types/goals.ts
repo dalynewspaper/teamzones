@@ -14,8 +14,8 @@ export interface GoalMetric {
   frequency: GoalTimeframe
 }
 
-export interface KeyResult {
-  id: string
+export interface GoalKeyResult {
+  id?: string
   description: string
   targetDate: string
   metrics: GoalMetric[]
@@ -55,7 +55,7 @@ export interface Goal {
   year?: number
   parentGoalId?: string
   metrics: GoalMetric[]
-  keyResults: KeyResult[]
+  keyResults: GoalKeyResult[]
   milestones: GoalMilestone[]
   assignees: GoalAssignee[]
   organizationId: string
@@ -95,14 +95,10 @@ export interface ExistingGoalContent {
 }
 
 export interface ParentGoalInfo {
-  parentGoal: {
-    title: string
-    description: string
-  }
-  generateMilestones?: boolean
-  generateMetrics?: boolean
-  timeframe?: GoalTimeframe
-  existingContent?: ExistingGoalContent
+  title: string
+  description: string
+  metrics?: GoalMetric[]
+  keyResults?: GoalKeyResult[]
 }
 
 export interface MilestoneSuggestion {
@@ -117,9 +113,33 @@ export interface MetricSuggestion {
   unit: string
 }
 
-export interface GoalSuggestions {
+export interface GoalSuggestion {
   enhancedTitle: string
   enhancedDescription: string
-  milestones?: MilestoneSuggestion[]
   metrics?: MetricSuggestion[]
+  keyResults?: {
+    description: string
+    targetDate?: string
+    metrics: MetricSuggestion[]
+  }[]
+  milestones?: MilestoneSuggestion[]
+}
+
+export interface QuarterInfo {
+  quarter: number
+  year: number
+  months: string[]
+}
+
+export interface GoalEnhancementOptions {
+  parentGoal?: ParentGoalInfo
+  timeframe?: GoalTimeframe
+  quarterInfo?: {
+    quarter: number
+    year: number
+    months: string[]
+  }
+  generateKeyResults?: boolean
+  generateMetrics?: boolean
+  suggestMilestones?: boolean
 } 

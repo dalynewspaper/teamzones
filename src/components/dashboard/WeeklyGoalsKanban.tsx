@@ -13,10 +13,10 @@ import {
   GoalType, 
   AllGoalTimeframes, 
   GoalMetric, 
-  KeyResult, 
   GoalMilestone,
   GoalPriority,
-  GoalTeamRole
+  GoalTeamRole,
+  GoalKeyResult
 } from '@/types/goals'
 import { Team } from '@/types/teams'
 import { 
@@ -110,7 +110,7 @@ interface WeeklyGoalData {
   type?: GoalType
   timeframe?: AllGoalTimeframes
   metrics?: GoalMetric[]
-  keyResults?: KeyResult[]
+  keyResults?: GoalKeyResult[]
   milestones?: GoalMilestone[]
   tags?: string[]
   recentActivity?: boolean

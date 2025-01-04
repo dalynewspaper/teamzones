@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, KeyResult } from '@/types/goals'
+import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalKeyResult } from '@/types/goals'
 import { createGoal, updateGoal, deleteGoal } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format } from 'date-fns'
@@ -130,7 +130,7 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
   })
 
   const [metrics, setMetrics] = useState<Partial<GoalMetric>[]>(initialData?.metrics || [])
-  const [keyResults, setKeyResults] = useState<Partial<KeyResult>[]>(initialData?.keyResults || [])
+  const [keyResults, setKeyResults] = useState<Partial<GoalKeyResult>[]>(initialData?.keyResults || [])
   const [selectedAssignees, setSelectedAssignees] = useState<AssigneeSelection[]>(
     initialData?.assignees?.map(a => ({
       userId: a.userId,
@@ -149,7 +149,7 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleKeyResultChange = (index: number, field: keyof KeyResult, value: string) => {
+  const handleKeyResultChange = (index: number, field: keyof GoalKeyResult, value: string) => {
     setKeyResults(prev => {
       const newKeyResults = [...prev]
       newKeyResults[index] = { 
@@ -224,7 +224,7 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
             ...m,
             id: m.id || `new-metric-${i}`
           })) || []
-        })) as KeyResult[],
+        })) as GoalKeyResult[],
         organizationId: user.organizationId,
         ownerId: user.uid,
         createdBy: user.uid,

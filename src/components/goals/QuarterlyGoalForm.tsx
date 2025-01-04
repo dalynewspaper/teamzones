@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/use-toast'
-import { CalendarIcon, InfoIcon, XCircle, Sparkles, Target, Lightbulb } from 'lucide-react'
+import { CalendarIcon, InfoIcon, XCircle, Sparkles, Target, Lightbulb, AlertCircle, PlusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,10 +13,21 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus } from '@/types/goals'
+import { 
+  Goal, 
+  GoalMetric, 
+  GoalType, 
+  GoalPriority, 
+  GoalTimeframe, 
+  GoalStatus,
+  ParentGoalInfo,
+  MetricSuggestion,
+  GoalSuggestion,
+  GoalEnhancementOptions
+} from '@/types/goals'
 import { createGoal, updateGoal, deleteGoal, getGoalsByTimeframe } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
-import { format, addMonths, startOfQuarter, endOfQuarter } from 'date-fns'
+import { format, addMonths, startOfQuarter, endOfQuarter, differenceInDays } from 'date-fns'
 import { getFiscalYearInfo, getQuarterInfo, getQuarterRange, getAvailableQuarters } from '@/utils/dateUtils'
 
 interface KeyResultWithMetrics {
@@ -263,15 +274,26 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
     try {
       setIsEnhancing(true)
       const suggestions = await enhanceGoal(
-        formData.title || "Quarterly goal suggestion",
-        formData.description || "",
+        formData.title || `${selectedQuarter.label} ${selectedQuarter.year} Strategic Initiatives`,
+        formData.description || `Quarterly execution plan to progress toward: ${selectedAnnualGoal.description}`,
         selectedQuarter.label,
         {
           parentGoal: {
             title: selectedAnnualGoal.title,
-            description: selectedAnnualGoal.description
-          }
-        }
+            description: selectedAnnualGoal.description,
+            metrics: selectedAnnualGoal.metrics,
+            keyResults: selectedAnnualGoal.keyResults
+          } as ParentGoalInfo,
+          timeframe: 'quarterly',
+          quarterInfo: {
+            quarter: selectedQuarter.quarter,
+            year: selectedQuarter.year,
+            months: months.map(m => m.label)
+          },
+          generateKeyResults: true,
+          generateMetrics: true,
+          suggestMilestones: true
+        } as GoalEnhancementOptions
       )
 
       // Update form with enhanced content
@@ -281,25 +303,33 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         description: suggestions.enhancedDescription
       }))
 
-      // Update metrics with AI suggestions
-      if (suggestions.metrics && suggestions.metrics.length > 0) {
-        const enhancedMetrics = suggestions.metrics.map(metric => ({
-          name: metric.name,
-          target: metric.target || 0,
-          current: 0,
-          unit: metric.unit || '',
-          frequency: 'monthly' as const
+      // Update key results with AI suggestions
+      const typedSuggestions = suggestions as GoalSuggestion & {
+        keyResults?: Array<{
+          description: string
+          targetDate?: string
+          metrics: MetricSuggestion[]
+        }>
+      }
+
+      if (typedSuggestions.keyResults && typedSuggestions.keyResults.length > 0) {
+        const enhancedKeyResults = typedSuggestions.keyResults.map((kr) => ({
+          description: kr.description,
+          targetDate: kr.targetDate || quarterEnd.toISOString(),
+          metrics: kr.metrics.map((m) => ({
+            name: m.name,
+            target: m.target || 0,
+            current: 0,
+            unit: m.unit || '',
+            frequency: 'monthly' as const
+          }))
         }))
-        setKeyResults([{
-          description: 'Key Result 1',
-          targetDate: quarterEnd.toISOString(),
-          metrics: enhancedMetrics
-        }])
+        setKeyResults(enhancedKeyResults)
       }
 
       toast({
         title: "Goal Enhanced",
-        description: "Your goal has been enhanced with AI suggestions.",
+        description: "Your quarterly goal has been enhanced with AI suggestions for key results and metrics.",
       })
     } catch (error) {
       console.error('Error enhancing goal:', error)
@@ -342,21 +372,11 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
 
   return (
     <div className="space-y-8">
-      {/* Strategic Context */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Strategic Context</Label>
-          <div className="flex items-center space-x-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <InfoIcon className="h-4 w-4 text-gray-400" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs">Quarterly goals should focus on specific deliverables that contribute to annual objectives.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+      {/* Progress Visualization */}
+      <Card className="p-6 bg-gradient-to-b from-blue-50 to-white border-blue-100">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-blue-900">Quarterly Progress Path</h3>
             <Button
               variant="outline"
               size="sm"
@@ -368,6 +388,114 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
               <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
             </Button>
           </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t-2 border-dashed border-blue-100" />
+            </div>
+            <div className="relative flex justify-between">
+              {months.map((month, index) => (
+                <div key={index} className="flex flex-col items-center">
+                  <div className="bg-white px-3 py-2 rounded-lg border border-blue-100">
+                    <div className="text-sm font-medium text-blue-900">{format(month.date, 'MMM')}</div>
+                    <div className="text-xs text-blue-600 mt-1">{format(month.date, 'dd/MM')}</div>
+                  </div>
+                  {index < months.length - 1 && (
+                    <div className="mt-2 text-xs text-blue-500">
+                      {index === 0 ? 'Start' : index === 1 ? 'Midpoint' : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {selectedAnnualGoal && (
+            <div className="mt-4 space-y-4">
+              <div className="p-4 bg-blue-50/50 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Target className="h-5 w-5 text-blue-600 mt-1" />
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium text-sm text-blue-900">Annual Goal Progress</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        {selectedAnnualGoal.title}
+                      </p>
+                    </div>
+                    {selectedAnnualGoal.metrics && selectedAnnualGoal.metrics.length > 0 && (
+                      <div className="space-y-2">
+                        {selectedAnnualGoal.metrics.map((metric, index) => (
+                          <div key={index} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-blue-900">{metric.name}</span>
+                              <span className="text-blue-700">{metric.current} / {metric.target}{metric.unit}</span>
+                            </div>
+                            <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-500 transition-all" 
+                                style={{ width: `${Math.min(100, (metric.current / metric.target) * 100)}%` }} 
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-white rounded-lg border border-blue-100">
+                  <div className="text-xs text-blue-600 mb-1">Key Milestones</div>
+                  <div className="text-sm font-medium text-blue-900">
+                    {months.map(m => format(m.date, 'MMM')).join(' → ')}
+                  </div>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-blue-100">
+                  <div className="text-xs text-blue-600 mb-1">Quarter Focus</div>
+                  <div className="text-sm font-medium text-blue-900">
+                    {selectedQuarter.label} {selectedQuarter.year}
+                  </div>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-blue-100">
+                  <div className="text-xs text-blue-600 mb-1">Days Remaining</div>
+                  <div className="text-sm font-medium text-blue-900">
+                    {differenceInDays(quarterEnd, new Date())} days
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Smart Suggestions Alert */}
+      {!selectedAnnualGoal && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-amber-900">Select an Annual Goal</h4>
+            <p className="text-sm text-amber-700 mt-1">
+              Choose an annual goal to get smart suggestions and ensure your quarterly objectives align with the bigger picture.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Strategic Context */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-lg font-semibold">Strategic Context</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <InfoIcon className="h-4 w-4 text-gray-400" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs">Quarterly goals should focus on specific deliverables that contribute to annual objectives.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Goal Hierarchy Visualization */}
@@ -451,79 +579,7 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
           </div>
         </Card>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Goal Type</Label>
-            <Select
-              value={formData.type}
-              onValueChange={(value: GoalType) => handleInputChange('type', value)}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select goal type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="department">Department Goal</SelectItem>
-                <SelectItem value="team">Team Goal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label>Priority Level</Label>
-            <Select
-              value={formData.priority}
-              onValueChange={(value: GoalPriority) => handleInputChange('priority', value)}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">High Priority</SelectItem>
-                <SelectItem value="medium">Medium Priority</SelectItem>
-                <SelectItem value="low">Low Priority</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div>
-          <Label>Time Period</Label>
-          <Select
-            value={`${selectedQuarter.quarter}-${selectedQuarter.year}`}
-            onValueChange={(value) => {
-              const [quarter, year] = value.split('-').map(Number)
-              const newQuarter = availableQuarters.find(q => q.quarter === quarter && q.year === year)
-              if (newQuarter) {
-                setSelectedQuarter(newQuarter)
-                // Update form dates
-                const { startDate, endDate } = getQuarterInfo(newQuarter.quarter, newQuarter.year)
-                setFormData(prev => ({
-                  ...prev,
-                  startDate: format(startDate, 'yyyy-MM-dd'),
-                  endDate: format(endDate, 'yyyy-MM-dd')
-                }))
-              }
-            }}
-          >
-            <SelectTrigger className="mt-1 w-[240px]">
-              <SelectValue placeholder="Select quarter" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableQuarters.map((q) => (
-                <SelectItem key={`${q.quarter}-${q.year}`} value={`${q.quarter}-${q.year}`}>
-                  <div className="flex flex-col text-left">
-                    <div className="font-medium">{q.label}</div>
-                    <div className="text-xs text-muted-foreground">{q.range}</div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Key Results */}
-      <div className="space-y-4">
+        {/* Key Results Section */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <Label className="text-lg font-semibold">Key Results</Label>
@@ -549,34 +605,24 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
           </TooltipProvider>
         </div>
 
-        {keyResults.length === 0 && (
-          <Card className="p-8">
-            <div className="flex flex-col items-center justify-center text-center mb-8">
-              <Target className="h-8 w-8 text-muted-foreground mb-4" />
-              <h4 className="font-medium mb-2">No Key Results Added</h4>
-              <p className="text-sm text-muted-foreground max-w-md">
-                Break down your quarterly goal into 2-3 specific, measurable outcomes that will indicate success.
-              </p>
-            </div>
-
-            {selectedAnnualGoal && (
-              <div className="space-y-6">
-                {/* Smart Suggestions Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-blue-600" />
-                    <h4 className="font-medium text-sm">Suggested Key Results</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedAnnualGoal.keyResults?.map((annualKR, index) => (
+        {keyResults.length === 0 && selectedAnnualGoal && (
+          <Card className="p-6">
+            <div className="space-y-6">
+              {/* Smart Suggestions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-blue-600" />
+                  <h4 className="font-medium text-sm">Quarterly Milestones</h4>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {selectedAnnualGoal.keyResults?.map((annualKR, index) => {
+                    const quarterlyTarget = Math.round((annualKR.metrics?.[0]?.target || 0) * 0.25)
+                    return (
                       <Button
                         key={index}
                         variant="outline"
-                        className="h-auto p-4 justify-start text-left"
+                        className="h-auto p-4 justify-start text-left relative group"
                         onClick={() => {
-                          const quarterlyTarget = Math.round(
-                            (annualKR.metrics?.[0]?.target || 0) * 0.25
-                          )
                           setKeyResults([...keyResults, {
                             description: `Q${selectedQuarter.quarter} milestone: ${annualKR.description}`,
                             targetDate: format(quarterEnd, 'yyyy-MM-dd'),
@@ -590,75 +636,108 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
                           }])
                         }}
                       >
-                        <div>
-                          <div className="font-medium text-sm mb-1">{annualKR.description}</div>
+                        <div className="space-y-2">
+                          <div className="font-medium text-sm">{annualKR.description}</div>
                           {annualKR.metrics?.[0] && (
-                            <div className="text-xs text-muted-foreground">
-                              Suggested quarterly target: {Math.round((annualKR.metrics[0].target || 0) * 0.25)}
-                              {annualKR.metrics[0].unit}
+                            <div className="space-y-1">
+                              <div className="text-xs text-muted-foreground">
+                                Suggested quarterly target: {quarterlyTarget}
+                                {annualKR.metrics[0].unit}
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-blue-500 transition-all" 
+                                  style={{ width: '0%' }} 
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <PlusCircle className="h-4 w-4 text-blue-600" />
+                        </div>
                       </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quick Templates Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4 text-amber-600" />
-                    <h4 className="font-medium text-sm">Quick Templates</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 justify-start text-left"
-                      onClick={() => {
-                        setKeyResults([...keyResults, {
-                          description: "Complete key project milestones",
-                          targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                          metrics: [{
-                            name: "Milestones Completed",
-                            target: 3,
-                            current: 0,
-                            unit: "/ 3",
-                            frequency: 'monthly'
-                          }]
-                        }])
-                      }}
-                    >
-                      <div>
-                        <div className="font-medium text-sm mb-1">Project Milestones</div>
-                        <div className="text-xs text-muted-foreground">Track completion of key deliverables</div>
-                      </div>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 justify-start text-left"
-                      onClick={() => {
-                        setKeyResults([...keyResults, {
-                          description: "Achieve quarterly performance targets",
-                          targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                          metrics: [{
-                            name: "Performance Score",
-                            target: 90,
-                            current: 0,
-                            unit: "%",
-                            frequency: 'monthly'
-                          }]
-                        }])
-                      }}
-                    >
-                      <div>
-                        <div className="font-medium text-sm mb-1">Performance Metrics</div>
-                        <div className="text-xs text-muted-foreground">Track key performance indicators</div>
-                      </div>
-                    </Button>
-                  </div>
+                    )
+                  })}
                 </div>
               </div>
-            )}
+
+              {/* Quick Templates */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-amber-600" />
+                  <h4 className="font-medium text-sm">Quick Templates</h4>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 justify-start text-left"
+                    onClick={() => {
+                      setKeyResults([...keyResults, {
+                        description: `${selectedQuarter.label} Development Milestones`,
+                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
+                        metrics: [{
+                          name: "Features Completed",
+                          target: 3,
+                          current: 0,
+                          unit: "features",
+                          frequency: 'monthly'
+                        }]
+                      }])
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium text-sm mb-1">Development Sprint</div>
+                      <div className="text-xs text-muted-foreground">Track feature completion</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 justify-start text-left"
+                    onClick={() => {
+                      setKeyResults([...keyResults, {
+                        description: `${selectedQuarter.label} Revenue Target`,
+                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
+                        metrics: [{
+                          name: "Quarterly Revenue",
+                          target: 250000,
+                          current: 0,
+                          unit: "€",
+                          frequency: 'monthly'
+                        }]
+                      }])
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium text-sm mb-1">Revenue Goals</div>
+                      <div className="text-xs text-muted-foreground">Track financial targets</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 justify-start text-left"
+                    onClick={() => {
+                      setKeyResults([...keyResults, {
+                        description: `${selectedQuarter.label} Customer Success`,
+                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
+                        metrics: [{
+                          name: "Customer Satisfaction",
+                          target: 90,
+                          current: 0,
+                          unit: "%",
+                          frequency: 'monthly'
+                        }]
+                      }])
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium text-sm mb-1">Customer Success</div>
+                      <div className="text-xs text-muted-foreground">Track satisfaction metrics</div>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </Card>
         )}
 
@@ -851,6 +930,83 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* Goal Settings */}
+      <div className="space-y-6 pt-6 border-t">
+        <Label className="text-lg font-semibold">Goal Settings</Label>
+        
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <Label>Goal Type</Label>
+            <Select
+              value={formData.type}
+              onValueChange={(value) => handleInputChange('type', value as GoalType)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select goal type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="department">Department Goal</SelectItem>
+                <SelectItem value="personal">Personal Goal</SelectItem>
+                <SelectItem value="team">Team Goal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Priority Level</Label>
+            <Select
+              value={formData.priority}
+              onValueChange={(value) => handleInputChange('priority', value as GoalPriority)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select priority level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High Priority</SelectItem>
+                <SelectItem value="medium">Medium Priority</SelectItem>
+                <SelectItem value="low">Low Priority</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Time Period</Label>
+          <Select
+            value={`${selectedQuarter.quarter}-${selectedQuarter.year}`}
+            onValueChange={(value) => {
+              const [quarter, year] = value.split('-').map(Number)
+              const newQuarter = availableQuarters.find(q => q.quarter === quarter && q.year === year)
+              if (newQuarter) {
+                setSelectedQuarter(newQuarter)
+                // Update form dates
+                const { startDate, endDate } = getQuarterInfo(newQuarter.quarter, newQuarter.year)
+                setFormData(prev => ({
+                  ...prev,
+                  startDate: format(startDate, 'yyyy-MM-dd'),
+                  endDate: format(endDate, 'yyyy-MM-dd')
+                }))
+              }
+            }}
+            disabled={mode === 'edit'}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select quarter" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableQuarters.map((q) => (
+                <SelectItem key={`${q.quarter}-${q.year}`} value={`${q.quarter}-${q.year}`}>
+                  <div className="flex flex-col text-left">
+                    <div className="font-medium">{q.label}</div>
+                    <div className="text-xs text-muted-foreground">{q.range}</div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex justify-end space-x-4">

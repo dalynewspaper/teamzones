@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Goal, GoalMetric, GoalType, GoalPriority, GoalTimeframe, GoalStatus, GoalMilestone, GoalAssignee } from '@/types/goals'
-import { createGoal, updateGoal, getGoalsByTimeframe, deleteGoal } from '@/services/goalService'
+import { createGoal, updateGoal, getGoalsByTimeframe, deleteGoal, subscribeToGoalsByTimeframe } from '@/services/goalService'
 import { enhanceGoal } from '@/services/openaiService'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, parseISO, addDays } from 'date-fns'
 import { Calendar } from '@/components/ui/calendar'
@@ -192,36 +192,25 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
     loadTeams()
   }, [user?.organizationId])
 
-  // Load monthly goals
+  // Load monthly goals with real-time updates
   useEffect(() => {
-    const loadMonthlyGoals = async () => {
-      if (!user?.organizationId) return
+    if (!user?.organizationId) return
 
-      try {
-        setIsLoadingMonthlyGoals(true)
-        const goals = await getGoalsByTimeframe('monthly', user.organizationId)
+    setIsLoadingMonthlyGoals(true)
+    
+    const unsubscribe = subscribeToGoalsByTimeframe(
+      'monthly',
+      user.organizationId,
+      (goals) => {
         setMonthlyGoals(goals)
-        
-        if (initialData?.parentGoalId) {
-          const parentGoal = goals.find(g => g.id === initialData.parentGoalId)
-          if (parentGoal) {
-            setSelectedMonthlyGoal(parentGoal)
-          }
-        }
-      } catch (error) {
-        console.error('Error loading monthly goals:', error)
-        toast({
-          title: 'Error',
-          description: 'Failed to load monthly goals. Please try again.',
-          variant: 'destructive'
-        })
-      } finally {
         setIsLoadingMonthlyGoals(false)
       }
-    }
+    )
 
-    loadMonthlyGoals()
-  }, [user?.organizationId, initialData?.parentGoalId])
+    return () => {
+      unsubscribe()
+    }
+  }, [user?.organizationId])
 
   const handleInputChange = (field: keyof FormData, value: any) => {
     console.log(`Updating ${field}:`, value) // Debug log

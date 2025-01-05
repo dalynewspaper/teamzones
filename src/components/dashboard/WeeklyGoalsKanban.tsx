@@ -3,8 +3,8 @@
 import React, { useState, useEffect, ChangeEvent, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWeek } from '@/contexts/WeekContext'
-import { getGoalsByTimeframe, updateGoal } from '@/services/goalService'
-import { getTeams } from '@/services/teamService'
+import { getGoalsByTimeframe, updateGoal, subscribeToGoalsByTimeframe } from '@/services/goalService'
+import { getTeams, subscribeToTeams } from '@/services/teamService'
 import { eventBus } from '@/lib/eventBus'
 import { 
   Goal, 
@@ -437,66 +437,69 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
     )
   }
 
-  // Load teams
+  // Load teams with real-time updates
   useEffect(() => {
-    const loadTeams = async () => {
-      if (!user?.organizationId) return
+    if (!user?.organizationId) return
 
-      try {
-        const teamsData = await getTeams(user.organizationId)
+    try {
+      const unsubscribe = subscribeToTeams(user.organizationId, (teamsData) => {
         setTeams(teamsData)
-      } catch (error) {
-        console.error('Error loading teams:', error)
-      }
-    }
+      })
 
-    loadTeams()
+      return () => {
+        unsubscribe()
+      }
+    } catch (error) {
+      console.error('Error setting up teams subscription:', error)
+    }
   }, [user?.organizationId])
 
   // Load goals
   useEffect(() => {
-    const loadGoals = async () => {
-      if (!user?.organizationId) {
-        console.log('Missing required data:', { organizationId: user?.organizationId })
-        return
-      }
-
-      try {
-        setLoading(true)
-        const today = new Date()
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 })
-        const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
-        const currentWeekNumber = getISOWeek(today)
-        const currentYear = today.getFullYear()
-
-        const weeklyGoals = await getGoalsByTimeframe(
-          'weekly',
-          user.organizationId,
-          currentWeekNumber,
-          currentYear,
-          weekStart,
-          weekEnd
-        )
-
-        // Ensure each goal has required properties
-        const goalsWithDefaults = weeklyGoals.map(goal => ({
-          ...goal,
-          status: goal.status || 'not_started',
-          progress: goal.progress || 0,
-          priority: goal.priority || 'medium',
-          type: goal.type || 'team',
-          timeframe: 'weekly' as const
-        }))
-
-        setGoals(goalsWithDefaults)
-      } catch (error) {
-        console.error('Error loading goals:', error)
-      } finally {
-        setLoading(false)
-      }
+    if (!user?.organizationId) {
+      console.log('Missing required data:', { organizationId: user?.organizationId })
+      return
     }
 
-    loadGoals()
+    try {
+      setLoading(true)
+      const today = new Date()
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 })
+      const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+      const currentWeekNumber = getISOWeek(today)
+      const currentYear = today.getFullYear()
+
+      // Set up real-time subscription
+      const unsubscribe = subscribeToGoalsByTimeframe(
+        'weekly',
+        user.organizationId,
+        (updatedGoals) => {
+          // Ensure each goal has required properties
+          const goalsWithDefaults = updatedGoals.map(goal => ({
+            ...goal,
+            status: goal.status || 'not_started',
+            progress: goal.progress || 0,
+            priority: goal.priority || 'medium',
+            type: goal.type || 'team',
+            timeframe: 'weekly' as const
+          }))
+
+          setGoals(goalsWithDefaults)
+          setLoading(false)
+        },
+        currentWeekNumber,
+        currentYear,
+        weekStart,
+        weekEnd
+      )
+
+      return () => {
+        unsubscribe()
+      }
+    } catch (error) {
+      console.error('Error setting up goals subscription:', error)
+      setLoading(false)
+    }
   }, [user?.organizationId])
 
   // Listen for goal updates

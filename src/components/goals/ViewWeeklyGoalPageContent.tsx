@@ -1,14 +1,14 @@
 'use client'
 
-import { getGoalById } from '@/services/goalService'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import { Goal } from '@/types/goals'
+import { subscribeToGoal } from '@/services/goalService'
 import { 
   CalendarIcon, 
   CheckCircle2, 
@@ -37,95 +37,60 @@ const statusColors = {
   completed: 'bg-green-100 text-green-800'
 }
 
-interface FirestoreTimestamp {
-  seconds: number;
-  nanoseconds: number;
-}
-
-const isFirestoreTimestamp = (value: any): value is FirestoreTimestamp => {
-  return typeof value === 'object' && value !== null && 
-    'seconds' in value && typeof value.seconds === 'number' &&
-    'nanoseconds' in value && typeof value.nanoseconds === 'number';
-};
-
-const formatDate = (date: Date | FirestoreTimestamp | string | null | undefined) => {
-  if (!date) return '';
-  try {
-    let dateObj: Date;
-    
-    // Handle Firestore Timestamp
-    if (isFirestoreTimestamp(date)) {
-      dateObj = new Date(date.seconds * 1000);
-    }
-    // Handle string date
-    else if (typeof date === 'string') {
-      dateObj = new Date(date);
-    }
-    // Handle Date object
-    else if (date instanceof Date) {
-      dateObj = date;
-    }
-    else {
-      console.error('Unhandled date format:', date);
-      return '';
-    }
-
-    // Validate the date is valid
-    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
-      console.error('Invalid date value:', date);
-      return '';
-    }
-
-    return format(dateObj, 'MMM d, yyyy');
-  } catch (error) {
-    console.error('Error formatting date:', error, 'Date value:', date);
-    return '';
-  }
-};
-
 export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentProps) {
+  const router = useRouter()
   const [goal, setGoal] = useState<Goal | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'activity'>('overview')
-  const router = useRouter()
 
   useEffect(() => {
-    const loadGoal = async () => {
-      try {
-        const fetchedGoal = await getGoalById(goalId)
-        if (!fetchedGoal) {
-          router.push('/404')
-          return
-        }
-        setGoal(fetchedGoal)
-      } catch (error) {
-        console.error('Error loading goal:', error)
-        router.push('/404')
-      } finally {
-        setIsLoading(false)
-      }
-    }
+    const unsubscribe = subscribeToGoal(goalId, (updatedGoal) => {
+      setGoal(updatedGoal)
+      setIsLoading(false)
+    })
 
-    loadGoal()
-  }, [goalId, router])
+    return () => {
+      unsubscribe()
+    }
+  }, [goalId])
 
   if (isLoading) {
     return (
       <div className="container mx-auto py-6 max-w-5xl">
-        <div className="flex items-center justify-center min-h-[200px]">
-          <div className="text-muted-foreground">Loading...</div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3" />
+          <div className="h-4 bg-gray-200 rounded w-2/3" />
+          <div className="grid grid-cols-4 gap-4 mt-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-4 h-24" />
+            ))}
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!goal) return null
+  if (!goal) {
+    return (
+      <div className="container mx-auto py-6 max-w-5xl">
+        <Card className="p-6 text-center">
+          <h2 className="text-lg font-medium mb-2">Goal not found</h2>
+          <p className="text-muted-foreground mb-4">This goal may have been deleted or you don't have access to it.</p>
+          <Button variant="outline" onClick={() => router.back()}>Go Back</Button>
+        </Card>
+      </div>
+    )
+  }
 
   const progress = goal.progress || 0
-  const progressColor = progress >= 75 ? 'bg-green-500' : 
-                       progress >= 50 ? 'bg-blue-500' : 
-                       progress >= 25 ? 'bg-yellow-500' : 
-                       'bg-gray-500'
+  const progressColor = progress >= 100 ? 'bg-green-500' :
+    progress >= 75 ? 'bg-blue-500' :
+    progress >= 50 ? 'bg-yellow-500' :
+    'bg-gray-500'
+
+  const formatDate = (date: string | Date) => {
+    return format(new Date(date), 'MMM d, yyyy')
+  }
 
   return (
     <div className="container mx-auto py-6 max-w-5xl">
@@ -180,7 +145,7 @@ export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentP
             <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
             <div className="flex items-center gap-2 font-semibold">
               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-              <span>{format(new Date(goal.startDate), 'MMM d')} - {format(new Date(goal.endDate), 'MMM d')}</span>
+              <span>{formatDate(goal.startDate)} - {formatDate(goal.endDate)}</span>
             </div>
           </Card>
 
@@ -317,53 +282,19 @@ export function ViewWeeklyGoalPageContent({ goalId }: ViewWeeklyGoalPageContentP
                 </div>
               </Card>
             )}
-
-            {/* Team & Assignees */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Team & Assignees</h2>
-              <div className="grid gap-4">
-                {goal.assignees && goal.assignees.map((assignee, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        {assignee.userId.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-medium">{assignee.userId}</div>
-                        <div className="text-sm text-muted-foreground capitalize">{assignee.role}</div>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">
-                      {formatDate(assignee.assignedAt)}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
           </div>
         )}
 
         {activeTab === 'updates' && (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Progress Updates</h2>
-              <Button>Add Update</Button>
-            </div>
-            <div className="text-center text-muted-foreground py-8">
-              No updates yet. Add your first progress update.
-            </div>
-          </Card>
+          <div>
+            {/* Updates content */}
+          </div>
         )}
 
         {activeTab === 'activity' && (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Activity Log</h2>
-            </div>
-            <div className="text-center text-muted-foreground py-8">
-              No activity recorded yet.
-            </div>
-          </Card>
+          <div>
+            {/* Activity content */}
+          </div>
         )}
       </div>
     </div>

@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore'
-import { getTeams, createDefaultTeam } from '@/services/teamService'
+import { getTeams, createDefaultTeam, subscribeToTeams } from '@/services/teamService'
 import { Team } from '@/types/teams'
 import { useToast } from '@/components/ui/use-toast'
 import { useTeamVisibility } from '@/contexts/TeamVisibilityContext'
@@ -90,13 +90,14 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
-  const { isTeamVisible, toggleTeamVisibility } = useTeamVisibility()
-  const [organizationName, setOrganizationName] = useState('')
   const [teams, setTeams] = useState<Team[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [organizationName, setOrganizationName] = useState('')
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+  const { isTeamVisible, toggleTeamVisibility } = useTeamVisibility()
 
+  // Handle online/offline status
   useEffect(() => {
     const handleOnline = () => setIsOffline(false)
     const handleOffline = () => setIsOffline(true)
@@ -110,67 +111,72 @@ export function Sidebar() {
     }
   }, [])
 
+  // Load organization data
   const loadOrganization = useCallback(async () => {
     if (!user?.organizationId) return
-
+    
     try {
-      setIsLoading(true)
       const orgRef = doc(db, 'organizations', user.organizationId)
-      const orgSnap = await getDoc(orgRef)
-      if (orgSnap.exists()) {
-        setOrganizationName(orgSnap.data().name)
+      const orgDoc = await getDoc(orgRef)
+      if (!orgDoc.exists()) {
+        setError('Organization not found')
+        return
       }
-      setError(null)
+      setOrganizationName(orgDoc.data().name)
     } catch (error) {
       console.error('Error loading organization:', error)
       setError('Failed to load organization')
-    } finally {
-      setIsLoading(false)
     }
   }, [user?.organizationId])
 
-  const loadTeams = useCallback(async () => {
-    if (!user?.uid || !user?.organizationId) {
-      console.log('No user or organization ID')
-      return
-    }
+  // Subscribe to teams
+  useEffect(() => {
+    if (!user?.organizationId) return
 
-    try {
-      setIsLoading(true)
-      console.log('Loading teams for organization:', user.organizationId)
-      const userTeams = await getTeams(user.organizationId)
-      console.log('Loaded teams:', userTeams)
+    setIsLoading(true)
+    console.log('Setting up teams subscription for organization:', user.organizationId)
+
+    // Ensure organizationId is a string
+    const organizationId = user.organizationId
+
+    const unsubscribe = subscribeToTeams(organizationId, async (updatedTeams) => {
+      console.log('Received updated teams:', updatedTeams)
       
-      if (userTeams.length === 0) {
-        console.log('Creating default team')
-        const defaultTeam = await createDefaultTeam(user.organizationId, user.uid)
-        setTeams([defaultTeam])
+      // If no teams exist, create a default team
+      if (updatedTeams.length === 0 && user.uid) {
+        try {
+          console.log('Creating default team')
+          const defaultTeam = await createDefaultTeam(organizationId, user.uid)
+          setTeams([defaultTeam])
+        } catch (error) {
+          console.error('Error creating default team:', error)
+          setError('Failed to create default team')
+        }
       } else {
-        setTeams(userTeams)
+        setTeams(updatedTeams)
       }
       
-      setError(null)
-    } catch (error) {
-      console.error('Error loading teams:', error)
-      setError('Failed to load teams')
-    } finally {
       setIsLoading(false)
+      setError(null)
+    })
+
+    return () => {
+      console.log('Cleaning up teams subscription')
+      unsubscribe()
     }
-  }, [user?.uid, user?.organizationId])
+  }, [user?.organizationId, user?.uid])
 
   useEffect(() => {
     if (!authLoading && user) {
-      console.log('Loading teams for user:', user.uid)
+      console.log('Loading organization for user:', user.uid)
       loadOrganization()
-      loadTeams()
     }
-  }, [authLoading, user, loadOrganization, loadTeams])
+  }, [authLoading, user, loadOrganization])
 
   const handleRetry = useCallback(() => {
     setError(null)
     loadOrganization()
-    loadTeams()
-  }, [loadOrganization, loadTeams])
+  }, [loadOrganization])
 
   if (authLoading) {
     return (

@@ -4,14 +4,13 @@ import { useEffect, useState } from 'react'
 import { useWeek } from '@/contexts/WeekContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { Goal, GoalStatus } from '@/types/goals'
-import { getGoalsByTimeframe } from '@/services/goalService'
+import { subscribeToGoalsByTimeframe } from '@/services/goalService'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Circle, Clock, AlertTriangle, Plus } from 'lucide-react'
 import Link from 'next/link'
-import { parseISO } from 'date-fns'
 import { getISOWeek } from 'date-fns'
 
 const statusIcons = {
@@ -28,29 +27,6 @@ const statusColors = {
   completed: 'bg-green-100 text-green-800'
 }
 
-interface FirestoreTimestamp {
-  seconds: number;
-  nanoseconds: number;
-}
-
-function isFirestoreTimestamp(value: any): value is FirestoreTimestamp {
-  return value && typeof value === 'object' && 'seconds' in value && 'nanoseconds' in value;
-}
-
-function parseDate(date: any): Date {
-  if (date instanceof Date) {
-    return date;
-  }
-  if (isFirestoreTimestamp(date)) {
-    return new Date(date.seconds * 1000);
-  }
-  if (typeof date === 'string') {
-    return parseISO(date);
-  }
-  console.error('Unknown date format:', date);
-  return new Date(); // fallback to current date
-}
-
 export function WeeklyGoalsDisplay() {
   const { currentWeek } = useWeek()
   const { user } = useAuth()
@@ -58,36 +34,30 @@ export function WeeklyGoalsDisplay() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const loadWeeklyGoals = async () => {
-      if (!user?.organizationId || !currentWeek) return
+    if (!user?.organizationId || !currentWeek) return
 
-      try {
-        setIsLoading(true)
-        const currentWeekNumber = getISOWeek(new Date(currentWeek.startDate))
-        const currentYear = new Date(currentWeek.startDate).getFullYear()
-        
-        console.log('Fetching goals for:', {
-          currentWeekNumber,
-          currentYear,
-          currentWeek,
-          startDate: new Date(currentWeek.startDate),
-          endDate: new Date(currentWeek.endDate)
-        })
-        
-        const weeklyGoals = await getGoalsByTimeframe(
-          'weekly', 
-          user.organizationId,
-          currentWeekNumber,
-          currentYear,
-          new Date(currentWeek.startDate),
-          new Date(currentWeek.endDate)
-        )
-        
-        console.log('Fetched weekly goals:', weeklyGoals)
+    setIsLoading(true)
+    const currentWeekNumber = getISOWeek(new Date(currentWeek.startDate))
+    const currentYear = new Date(currentWeek.startDate).getFullYear()
+    
+    console.log('Setting up subscription for:', {
+      currentWeekNumber,
+      currentYear,
+      currentWeek,
+      startDate: new Date(currentWeek.startDate),
+      endDate: new Date(currentWeek.endDate)
+    })
+    
+    // Set up real-time subscription
+    const unsubscribe = subscribeToGoalsByTimeframe(
+      'weekly',
+      user.organizationId,
+      (updatedGoals) => {
+        console.log('Received updated goals:', updatedGoals)
         
         // Deduplicate goals using a Map
         const uniqueGoals = Array.from(
-          new Map(weeklyGoals.map(goal => [goal.id, goal])).values()
+          new Map(updatedGoals.map(goal => [goal.id, goal])).values()
         )
         
         console.log('Unique goals:', uniqueGoals)
@@ -99,14 +69,18 @@ export function WeeklyGoalsDisplay() {
         }))
         
         setGoals(goalsWithStatus)
-      } catch (error) {
-        console.error('Error loading weekly goals:', error)
-      } finally {
         setIsLoading(false)
-      }
-    }
+      },
+      currentWeekNumber,
+      currentYear,
+      new Date(currentWeek.startDate),
+      new Date(currentWeek.endDate)
+    )
 
-    loadWeeklyGoals()
+    // Cleanup subscription on unmount or when dependencies change
+    return () => {
+      unsubscribe()
+    }
   }, [user?.organizationId, currentWeek])
 
   // Debug render

@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, orderBy, onSnapshot, QueryConstraint } from 'firebase/firestore';
 import { Goal, GoalTimeframe, GoalType, AllGoalTimeframes } from '@/types/goals';
 
 export async function createGoal(goal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -269,6 +269,7 @@ export async function assignMemberToGoal(
   filteredAssignees.push({
     userId,
     role,
+    name: '',
     assignedAt: new Date()
   });
 
@@ -309,5 +310,117 @@ export async function removeMemberFromGoal(goalId: string, userId: string): Prom
   await updateDoc(goalRef, {
     assignees: assignees.filter(a => a.userId !== userId),
     updatedAt: new Date()
+  });
+}
+
+// Real-time subscription methods
+export function subscribeToGoal(goalId: string, callback: (goal: Goal | null) => void) {
+  const goalRef = doc(db, 'goals', goalId);
+  
+  return onSnapshot(goalRef, (snapshot) => {
+    if (!snapshot.exists()) {
+      callback(null);
+      return;
+    }
+
+    const goalData = snapshot.data();
+    callback({
+      id: snapshot.id,
+      ...goalData,
+      startDate: goalData.startDate?.toDate() || new Date(),
+      endDate: goalData.endDate?.toDate() || new Date(),
+      createdAt: goalData.createdAt?.toDate() || new Date(),
+      updatedAt: goalData.updatedAt?.toDate() || new Date(),
+      metrics: goalData.metrics || [],
+      keyResults: goalData.keyResults || [],
+      milestones: goalData.milestones || [],
+      assignees: goalData.assignees || [],
+      tags: goalData.tags || [],
+      teamRoles: goalData.teamRoles || []
+    } as Goal);
+  });
+}
+
+export function subscribeToGoalsByTimeframe(
+  timeframe: AllGoalTimeframes,
+  organizationId: string,
+  callback: (goals: Goal[]) => void,
+  calendarWeek?: number,
+  year?: number,
+  startDate?: Date,
+  endDate?: Date
+) {
+  const goalsCollection = collection(db, 'goals');
+  const constraints: QueryConstraint[] = [
+    where('timeframe', '==', timeframe),
+    where('organizationId', '==', organizationId)
+  ];
+
+  const q = query(goalsCollection, ...constraints);
+  
+  return onSnapshot(q, (snapshot) => {
+    let goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+
+    // Apply client-side filters for weekly goals
+    if (timeframe === 'weekly') {
+      if (calendarWeek && year) {
+        goals = goals.filter(goal => goal.calendarWeek === calendarWeek && goal.year === year);
+      } else if (startDate && endDate) {
+        goals = goals.filter(goal => {
+          const goalStart = goal.startDate instanceof Date ? goal.startDate : new Date(goal.startDate);
+          const goalEnd = goal.endDate instanceof Date ? goal.endDate : new Date(goal.endDate);
+          return (
+            (goalStart <= endDate && goalStart >= startDate) ||
+            (goalEnd >= startDate && goalEnd <= endDate) ||
+            (goalStart <= startDate && goalEnd >= endDate)
+          );
+        });
+      }
+    }
+
+    // Sort by createdAt
+    goals.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    callback(goals);
+  });
+}
+
+export function subscribeToGoalsByType(
+  type: GoalType,
+  organizationId: string,
+  callback: (goals: Goal[]) => void
+) {
+  const goalsCollection = collection(db, 'goals');
+  const q = query(
+    goalsCollection,
+    where('type', '==', type),
+    where('organizationId', '==', organizationId),
+    orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (snapshot) => {
+    const goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+    callback(goals);
+  });
+}
+
+export function subscribeToChildGoals(
+  parentGoalId: string,
+  callback: (goals: Goal[]) => void
+) {
+  const goalsCollection = collection(db, 'goals');
+  const q = query(
+    goalsCollection,
+    where('parentGoalId', '==', parentGoalId),
+    orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (snapshot) => {
+    const goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+    callback(goals);
   });
 } 

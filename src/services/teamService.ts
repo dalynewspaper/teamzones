@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, deleteField, onSnapshot } from 'firebase/firestore'
 import { Team, TeamMember, TeamRole } from '@/types/teams'
 import { sendEmail } from '@/lib/email'
 import { generateInviteToken } from '@/lib/inviteToken'
@@ -14,6 +14,19 @@ const convertTimestamps = (data: any) => ({
     lastActivityAt: data.metrics.lastActivityAt?.toDate?.() || new Date(data.metrics.lastActivityAt)
   } : undefined
 })
+
+export function subscribeToTeams(organizationId: string, callback: (teams: Team[]) => void) {
+  const teamsRef = collection(db, 'teams')
+  const q = query(teamsRef, where('organizationId', '==', organizationId))
+  
+  return onSnapshot(q, (snapshot) => {
+    const teams = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...convertTimestamps(doc.data())
+    })) as Team[]
+    callback(teams)
+  })
+}
 
 export async function getTeams(organizationId: string, userId?: string): Promise<Team[]> {
   const teamsRef = collection(db, 'teams')
@@ -74,8 +87,46 @@ export async function updateTeam(teamId: string, team: Partial<Team>): Promise<v
   })
 }
 
-export async function deleteTeam(teamId: string): Promise<void> {
-  await deleteDoc(doc(db, 'teams', teamId))
+export async function deleteTeam(organizationId: string, teamId: string): Promise<void> {
+  // Get the team first to check if it's the default team
+  const teamRef = doc(db, 'teams', teamId);
+  const teamDoc = await getDoc(teamRef);
+  
+  if (!teamDoc.exists()) {
+    throw new Error('Team not found');
+  }
+
+  const team = teamDoc.data() as Team;
+  
+  // Prevent deletion of default team
+  if (team.isDefault) {
+    throw new Error('Cannot delete the default team');
+  }
+
+  // Get all goals associated with this team
+  const goalsCollection = collection(db, 'goals');
+  const goalsQuery = query(
+    goalsCollection,
+    where('organizationId', '==', organizationId),
+    where('teamId', '==', teamId)
+  );
+  
+  const goalsSnapshot = await getDocs(goalsQuery);
+  
+  // First update all goals to remove team references
+  for (const goalDoc of goalsSnapshot.docs) {
+    const goalData = goalDoc.data();
+    const teamRoles = (goalData.teamRoles || []).filter((tr: any) => tr.teamId !== teamId);
+    
+    await updateDoc(goalDoc.ref, {
+      teamId: deleteField(),
+      teamRoles,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  // Then delete the team
+  await deleteDoc(teamRef);
 }
 
 export async function inviteMemberByEmail(

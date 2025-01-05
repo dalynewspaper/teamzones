@@ -231,6 +231,7 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
         tags: [],
         assignees: selectedAssignees.length > 0 ? [{
           userId: selectedAssignees[0].userId,
+          name: user.displayName || 'Unknown User',
           role: 'owner' as const,
           assignedAt: new Date()
         }] : [],

@@ -31,6 +31,8 @@ export interface GoalMilestone {
 
 export interface GoalAssignee {
   userId: string
+  name: string
+  photoURL?: string
   role: 'owner' | 'contributor' | 'reviewer'
   assignedAt: Date
 }

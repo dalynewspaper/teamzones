@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/use-toast'
-import { CalendarIcon, InfoIcon, XCircle, Sparkles, Target, Lightbulb, AlertCircle, PlusCircle } from 'lucide-react'
+import { CalendarIcon, InfoIcon, XCircle, Sparkles, Target, Lightbulb, AlertCircle, PlusCircle, PlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -377,16 +377,6 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-blue-900">Quarterly Progress Path</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEnhanceWithAI}
-              disabled={isEnhancing}
-              className="flex items-center space-x-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
-            </Button>
           </div>
 
           <div className="relative">
@@ -486,16 +476,28 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Label className="text-lg font-semibold">Strategic Context</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <InfoIcon className="h-4 w-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">Quarterly goals should focus on specific deliverables that contribute to annual objectives.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEnhanceWithAI}
+              disabled={isEnhancing}
+              className="flex items-center space-x-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
+            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <InfoIcon className="h-4 w-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">Quarterly goals should focus on specific deliverables that contribute to annual objectives.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
         {/* Goal Hierarchy Visualization */}
@@ -580,356 +582,199 @@ export function QuarterlyGoalForm({ initialData, mode = 'create', parentGoalId, 
         </Card>
 
         {/* Key Results Section */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <Label className="text-lg font-semibold">Key Results</Label>
-            <p className="text-sm text-muted-foreground">Define 2-3 measurable outcomes for this quarter</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-lg font-semibold">Key Results</Label>
+              <p className="text-sm text-muted-foreground">Define 2-3 measurable outcomes for this quarter</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddKeyResult}
+              disabled={keyResults.length >= 3}
+              className="flex items-center gap-2"
+            >
+              <PlusIcon className="h-4 w-4" />
+              <span>Add Key Result</span>
+            </Button>
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddKeyResult}
-                  disabled={keyResults.length >= 3}
-                >
-                  Add Key Result
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-xs">
-                <p>Quarterly key results should be specific milestones that contribute to annual objectives.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
 
-        {keyResults.length === 0 && selectedAnnualGoal && (
-          <Card className="p-6">
-            <div className="space-y-6">
-              {/* Smart Suggestions */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-blue-600" />
-                  <h4 className="font-medium text-sm">Quarterly Milestones</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedAnnualGoal.keyResults?.map((annualKR, index) => {
-                    const quarterlyTarget = Math.round((annualKR.metrics?.[0]?.target || 0) * 0.25)
-                    return (
-                      <Button
-                        key={index}
-                        variant="outline"
-                        className="h-auto p-4 justify-start text-left relative group"
-                        onClick={() => {
-                          setKeyResults([...keyResults, {
-                            description: `Q${selectedQuarter.quarter} milestone: ${annualKR.description}`,
-                            targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                            metrics: annualKR.metrics?.map(m => ({
-                              name: m.name,
-                              target: quarterlyTarget,
-                              current: 0,
-                              unit: m.unit,
-                              frequency: 'monthly'
-                            })) || []
-                          }])
-                        }}
-                      >
-                        <div className="space-y-2">
-                          <div className="font-medium text-sm">{annualKR.description}</div>
-                          {annualKR.metrics?.[0] && (
-                            <div className="space-y-1">
-                              <div className="text-xs text-muted-foreground">
-                                Suggested quarterly target: {quarterlyTarget}
-                                {annualKR.metrics[0].unit}
-                              </div>
-                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-blue-500 transition-all" 
-                                  style={{ width: '0%' }} 
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <PlusCircle className="h-4 w-4 text-blue-600" />
-                        </div>
-                      </Button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Quick Templates */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="h-4 w-4 text-amber-600" />
-                  <h4 className="font-medium text-sm">Quick Templates</h4>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    className="h-auto p-4 justify-start text-left"
-                    onClick={() => {
-                      setKeyResults([...keyResults, {
-                        description: `${selectedQuarter.label} Development Milestones`,
-                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                        metrics: [{
-                          name: "Features Completed",
-                          target: 3,
-                          current: 0,
-                          unit: "features",
-                          frequency: 'monthly'
-                        }]
-                      }])
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium text-sm mb-1">Development Sprint</div>
-                      <div className="text-xs text-muted-foreground">Track feature completion</div>
-                    </div>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-auto p-4 justify-start text-left"
-                    onClick={() => {
-                      setKeyResults([...keyResults, {
-                        description: `${selectedQuarter.label} Revenue Target`,
-                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                        metrics: [{
-                          name: "Quarterly Revenue",
-                          target: 250000,
-                          current: 0,
-                          unit: "€",
-                          frequency: 'monthly'
-                        }]
-                      }])
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium text-sm mb-1">Revenue Goals</div>
-                      <div className="text-xs text-muted-foreground">Track financial targets</div>
-                    </div>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-auto p-4 justify-start text-left"
-                    onClick={() => {
-                      setKeyResults([...keyResults, {
-                        description: `${selectedQuarter.label} Customer Success`,
-                        targetDate: format(quarterEnd, 'yyyy-MM-dd'),
-                        metrics: [{
-                          name: "Customer Satisfaction",
-                          target: 90,
-                          current: 0,
-                          unit: "%",
-                          frequency: 'monthly'
-                        }]
-                      }])
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium text-sm mb-1">Customer Success</div>
-                      <div className="text-xs text-muted-foreground">Track satisfaction metrics</div>
-                    </div>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {keyResults.map((kr, krIndex) => (
-          <Card key={krIndex} className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-medium">Key Result {krIndex + 1}</h4>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="max-w-xs">Key Results should be specific, measurable outcomes that contribute to the quarterly goal.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDeleteKeyResult(krIndex)}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Label>Description</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">Format: "Achieve [Specific Outcome] by [Month]" or "Increase/Decrease [Metric] from X to Y"</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <Textarea
-                  value={kr.description}
-                  onChange={(e) => handleKeyResultChange(krIndex, 'description', e.target.value)}
-                  placeholder="e.g., Complete feature development for beta release by end of Q2"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Label>Target Month</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">When do you expect to achieve this key result? This should be within the quarter.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <Select
-                  value={kr.targetDate}
-                  onValueChange={(value) => handleKeyResultChange(krIndex, 'targetDate', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((m) => (
-                      <SelectItem key={m.label} value={m.date.toISOString()}>
-                        {m.label} (Due {format(m.date, 'MM/dd/yyyy')})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Metrics for this Key Result */}
+          {keyResults.map((kr, krIndex) => (
+            <Card key={krIndex} className="p-4">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label>Success Metrics</Label>
-                    <p className="text-sm text-muted-foreground">Define how you'll measure progress</p>
+                  <div className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-blue-600" />
+                    <h4 className="font-medium">Key Result {krIndex + 1}</h4>
                   </div>
                   <Button
-                    type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => handleAddKeyResultMetric(krIndex)}
+                    onClick={() => handleDeleteKeyResult(krIndex)}
                   >
-                    Add Metric
+                    <XCircle className="h-4 w-4" />
                   </Button>
                 </div>
 
-                {kr.metrics.map((metric, metricIndex) => (
-                  <div key={metricIndex} className="p-4 bg-gray-50 rounded-lg space-y-4">
-                    <div className="flex gap-4 items-start">
-                      <div className="flex-1 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea
+                      value={kr.description}
+                      onChange={(e) => handleKeyResultChange(krIndex, 'description', e.target.value)}
+                      placeholder="e.g., Increase monthly active users from 10k to 25k by end of Q2"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Target Date</Label>
+                    <Select
+                      value={kr.targetDate}
+                      onValueChange={(value) => handleKeyResultChange(krIndex, 'targetDate', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select target date" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {months.map((m) => (
+                          <SelectItem key={m.label} value={m.date.toISOString()}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Success Metrics</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddKeyResultMetric(krIndex)}
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                        <span>Add Metric</span>
+                      </Button>
+                    </div>
+
+                    {kr.metrics.map((metric, metricIndex) => (
+                      <div key={metricIndex} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1 grid grid-cols-4 gap-3">
                           <div>
-                            <Label>Metric Name</Label>
+                            <Label className="text-xs text-muted-foreground">Metric</Label>
                             <Input
                               value={metric.name}
                               onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'name', e.target.value)}
-                              placeholder="e.g., Features Completed"
+                              placeholder="e.g., Active Users"
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <Label>Unit</Label>
-                            <Input
-                              type="text"
-                              value={metric.unit}
-                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
-                              placeholder="e.g., count, %, $"
-                              className="mt-1"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Label>Target Value</Label>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="max-w-xs">The value you aim to achieve by the target month</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
+                            <Label className="text-xs text-muted-foreground">Target</Label>
                             <Input
                               type="number"
                               value={metric.target}
                               onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'target', parseFloat(e.target.value))}
-                              placeholder="e.g., 100"
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Label>Starting Value</Label>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="max-w-xs">The current or starting value for this metric</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
+                            <Label className="text-xs text-muted-foreground">Current</Label>
                             <Input
                               type="number"
                               value={metric.current}
                               onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'current', parseFloat(e.target.value))}
-                              placeholder="e.g., 0"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Unit</Label>
+                            <Input
+                              value={metric.unit}
+                              onChange={(e) => handleKeyResultMetricChange(krIndex, metricIndex, 'unit', e.target.value)}
+                              placeholder="e.g., users"
                               className="mt-1"
                             />
                           </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newKeyResults = [...keyResults]
+                            newKeyResults[krIndex].metrics = newKeyResults[krIndex].metrics.filter((_, i) => i !== metricIndex)
+                            setKeyResults(newKeyResults)
+                          }}
+                          className="self-end"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                          const newKeyResults = [...keyResults]
-                          newKeyResults[krIndex].metrics = newKeyResults[krIndex].metrics.filter((_, i) => i !== metricIndex)
-                          setKeyResults(newKeyResults)
-                        }}
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))}
+
+          {keyResults.length === 0 && selectedAnnualGoal && (
+            <Card className="p-6">
+              <div className="space-y-6">
+                {/* Smart Suggestions */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    <h4 className="font-medium text-sm">Suggested Key Results</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedAnnualGoal.keyResults?.map((annualKR, index) => {
+                      const quarterlyTarget = Math.round((annualKR.metrics?.[0]?.target || 0) * 0.25)
+                      return (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          className="h-auto p-4 justify-start text-left relative group"
+                          onClick={() => {
+                            setKeyResults([...keyResults, {
+                              description: `Q${selectedQuarter.quarter} milestone: ${annualKR.description}`,
+                              targetDate: format(quarterEnd, 'yyyy-MM-dd'),
+                              metrics: annualKR.metrics?.map(m => ({
+                                name: m.name,
+                                target: quarterlyTarget,
+                                current: 0,
+                                unit: m.unit,
+                                frequency: 'monthly'
+                              })) || []
+                            }])
+                          }}
+                        >
+                          <div className="space-y-2">
+                            <div className="font-medium text-sm">{annualKR.description}</div>
+                            {annualKR.metrics?.[0] && (
+                              <div className="text-xs text-muted-foreground">
+                                Suggested quarterly target: {quarterlyTarget}
+                                {annualKR.metrics[0].unit}
+                              </div>
+                            )}
+                          </div>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <PlusCircle className="h-4 w-4 text-blue-600" />
+                          </div>
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* Goal Settings */}

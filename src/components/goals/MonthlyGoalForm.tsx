@@ -89,11 +89,6 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
   const [quarterlyGoals, setQuarterlyGoals] = useState<Goal[]>([])
   const [selectedQuarterlyGoal, setSelectedQuarterlyGoal] = useState<Goal | null>(null)
   const [isLoadingQuarterlyGoals, setIsLoadingQuarterlyGoals] = useState(true)
-  const [showSmartSuggestions, setShowSmartSuggestions] = useState(true)
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [suggestedMilestones, setSuggestedMilestones] = useState<MilestoneSuggestion[]>([])
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set())
 
   const defaultStartDate = startOfMonth(new Date())
   const defaultEndDate = endOfMonth(new Date())
@@ -474,8 +469,6 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
         dueDate: addDays(monthStart, m.dueDate),
         status: 'not_started' as GoalStatus
       })))
-
-      setSelectedTemplate(templateId)
     }
   }
 
@@ -485,16 +478,6 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-blue-900">Monthly Progress Path</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEnhanceWithAI}
-              disabled={isEnhancing}
-              className="flex items-center space-x-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
-            </Button>
           </div>
 
           {/* Month Selector */}
@@ -595,59 +578,32 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
         </div>
       </Card>
 
-      {/* Smart Assistant */}
-      {showSmartSuggestions && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <div className="flex items-start gap-4">
-            <div className="p-2 rounded-full bg-blue-100">
-              <Lightbulb className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-medium text-blue-900">Smart Goal Assistant</h3>
-              <p className="text-sm text-blue-700 mt-1">
-                Start with a template or get AI assistance to create an effective monthly goal.
-              </p>
-              <div className="mt-4 flex gap-4">
-                <Select value={selectedTemplate} onValueChange={handleTemplateSelect}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Choose a template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {monthlyTemplates.map(template => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSmartSuggestions(false)}
-              className="text-blue-600"
-            >
-              <XCircle className="h-4 w-4" />
-            </Button>
-          </div>
-        </Card>
-      )}
-
       {/* Goal Hierarchy */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <Label className="text-lg font-semibold">Strategic Context</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <InfoIcon className="h-4 w-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">Monthly goals should focus on specific operational tasks that contribute to quarterly objectives.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEnhanceWithAI}
+              disabled={isEnhancing}
+              className="flex items-center space-x-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>{isEnhancing ? 'Enhancing...' : 'Enhance with AI'}</span>
+            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <InfoIcon className="h-4 w-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">Monthly goals should focus on specific operational tasks that contribute to quarterly objectives.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
         <Card className="p-4">
@@ -891,7 +847,63 @@ export function MonthlyGoalForm({ initialData, mode = 'create', parentGoalId, on
           ))}
         </div>
 
-        <div className="flex justify-end space-x-4">
+        {/* Goal Settings */}
+        <div className="space-y-6 mt-8">
+          <h3 className="text-lg font-semibold">Goal Settings</h3>
+          
+          <div className="grid grid-cols-2 gap-6">
+            {/* Goal Type */}
+            <div className="space-y-2">
+              <Label>Goal Type</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value: GoalType) =>
+                  setFormData(prev => ({ ...prev, type: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select goal type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Company Goal</SelectItem>
+                  <SelectItem value="department">Department Goal</SelectItem>
+                  <SelectItem value="team">Team Goal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Priority Level */}
+            <div className="space-y-2">
+              <Label>Priority Level</Label>
+              <Select
+                value={formData.priority}
+                onValueChange={(value: GoalPriority) =>
+                  setFormData(prev => ({ ...prev, priority: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">High Priority</SelectItem>
+                  <SelectItem value="medium">Medium Priority</SelectItem>
+                  <SelectItem value="low">Low Priority</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Time Period */}
+            <div className="space-y-2">
+              <Label>Time Period</Label>
+              <div className="flex items-center space-x-2 h-10 px-3 rounded-md border border-input bg-background text-sm text-muted-foreground">
+                <CalendarIcon className="h-4 w-4" />
+                <span>{format(monthStart, 'MMMM yyyy')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-4 mt-8">
           {mode === 'edit' && (
             <Button
               variant="destructive"

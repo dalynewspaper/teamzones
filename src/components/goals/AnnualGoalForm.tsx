@@ -563,9 +563,9 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
             <div className="flex-1">
               <h3 className="font-medium text-blue-900">Smart Goal Assistant</h3>
               <p className="text-sm text-blue-700 mt-1">
-                Start with a template or get AI assistance to create an effective annual goal.
+                Start with a template to create an effective annual goal.
               </p>
-              <div className="mt-4 flex gap-4">
+              <div className="mt-4">
                 <Select value={selectedTemplate} onValueChange={handleTemplateSelect}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Choose a template" />
@@ -578,15 +578,6 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="secondary"
-                  onClick={handleEnhanceWithAI}
-                  disabled={isEnhancing}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isEnhancing ? 'Enhancing...' : 'Enhance with AI'}
-                </Button>
               </div>
             </div>
             <Button
@@ -604,18 +595,29 @@ export function AnnualGoalForm({ initialData, mode = 'create', onSuccess }: Annu
       {/* Main Form */}
       <div className="space-y-6">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Label>Goal Title</Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs">Make your goal specific and measurable. Good example: "Increase ARR by 30% by end of 2025"</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Label>Goal Title</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">Make your goal specific and measurable. Good example: "Increase ARR by 30% by end of 2025"</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleEnhanceWithAI}
+              disabled={isEnhancing}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {isEnhancing ? 'Enhancing...' : 'Enhance with AI'}
+            </Button>
           </div>
           <Input
             value={formData.title}

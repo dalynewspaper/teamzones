@@ -47,9 +47,9 @@ export default function Home() {
               <Image 
                 src="/logo.svg" 
                 alt="OpenAsync" 
-                width={40} 
-                height={40} 
-                className="w-auto h-10"
+                width={62} 
+                height={12} 
+                className="w-auto h-6"
               />
             </Link>
             <div className="hidden md:flex items-center space-x-8">
@@ -892,9 +892,9 @@ export default function Home() {
                   <Image 
                     src="/logo.svg" 
                     alt="OpenAsync" 
-                    width={32} 
-                    height={32} 
-                    className="w-8 h-8"
+                    width={62} 
+                    height={12} 
+                    className="w-auto h-6"
                   />
                   <span className="text-sm text-gray-500">
                     © {new Date().getFullYear()} OpenAsync. All rights reserved.

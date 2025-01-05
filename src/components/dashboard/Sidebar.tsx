@@ -12,6 +12,7 @@ import { getTeams, createDefaultTeam, subscribeToTeams } from '@/services/teamSe
 import { Team } from '@/types/teams'
 import { useToast } from '@/components/ui/use-toast'
 import { useTeamVisibility } from '@/contexts/TeamVisibilityContext'
+import Image from 'next/image'
 
 // Enable offline persistence
 try {
@@ -190,10 +191,22 @@ export function Sidebar() {
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
+      {/* Logo */}
+      <div className="p-4 border-b border-gray-200">
+        <Link href="/dashboard" className="flex items-center">
+          <Image 
+            src="/logo.svg" 
+            alt="OpenAsync" 
+            width={62} 
+            height={12} 
+            className="w-auto h-6"
+          />
+        </Link>
+      </div>
       {/* Workspace Selector */}
       <div className="px-3 py-2 border-b border-gray-200">
         <Button variant="ghost" className="w-full justify-between text-sm font-medium">
-          {organizationName ? `${organizationName}'s Workspace` : 'Loading...'}
+          {organizationName || 'Loading...'}
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>
         <Link href="/dashboard/settings?tab=members">

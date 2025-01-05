@@ -333,9 +333,6 @@ export function Dashboard({ children }: DashboardProps) {
     { name: 'Home', href: '/dashboard', icon: Home },
     { name: 'Strategic Goals', href: '/dashboard/goals', icon: Target },
     { name: 'Weekly Goals', href: '/dashboard/goals/weekly', icon: ListTodo },
-    { name: 'My Updates', href: '/dashboard/updates', icon: MessageSquare },
-    { name: 'Insights', href: '/dashboard/insights', icon: BarChart },
-    { name: 'Activity', href: '/dashboard/activity', icon: Activity },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings }
   ]
 
@@ -345,8 +342,15 @@ export function Dashboard({ children }: DashboardProps) {
       <div className="w-64 border-r bg-white flex flex-col h-screen flex-shrink-0">
         {/* Logo */}
         <div className="h-16 flex items-center px-4 border-b border-gray-200">
-          <Link href="/" className="text-xl font-semibold text-[#4263EB]">
-            OpenAsync
+          <Link href="/" className="flex items-center">
+            <Image 
+              src="/logo.svg" 
+              alt="OpenAsync" 
+              width={62} 
+              height={12} 
+              className="w-auto h-6"
+              priority
+            />
           </Link>
         </div>
 

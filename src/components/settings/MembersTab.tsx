@@ -61,5 +61,21 @@ export function MembersTab() {
     }
   }, [usersData, ownerId])
 
-  // Rest of your component code...
+  return (
+    <div className="space-y-4">
+      {members.map((member) => (
+        <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="text-sm">
+              <p className="font-medium">{member.displayName}</p>
+              <p className="text-gray-500">{member.email}</p>
+            </div>
+          </div>
+          <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100">
+            {member.role}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 } 

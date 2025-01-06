@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { VideoRecordingInterface } from '@/components/video/VideoRecordingInterface'
 import { useToast } from '@/components/ui/toast'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface VideoRecordingFlowProps {
   weekId?: string
@@ -64,10 +64,10 @@ export function VideoRecordingFlow({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-[90%] w-[1200px] h-[80vh] p-0">
         <div className="h-full flex flex-col p-6">
-          <div className="flex-none space-y-2">
-            <h2 className="text-2xl font-semibold">Record Update</h2>
-            <p className="text-gray-600">Share an update with your team</p>
-          </div>
+          <DialogHeader className="flex-none space-y-2">
+            <DialogTitle>Record Update</DialogTitle>
+            <DialogDescription>Share an update with your team</DialogDescription>
+          </DialogHeader>
           <div className="flex-1 overflow-hidden mt-6">
             <VideoRecordingInterface
               onRecordingComplete={handleRecordingComplete}

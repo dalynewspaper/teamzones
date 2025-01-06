@@ -1,174 +1,115 @@
-import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Goal, GoalType, GoalTimeframe } from '@/types/goals';
-import { createGoal } from '@/services/goalService';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
-import { format, endOfWeek } from 'date-fns';
+'use client'
+
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { AnnualGoalForm } from './AnnualGoalForm'
+import { QuarterlyGoalForm } from './QuarterlyGoalForm'
+import { MonthlyGoalForm } from './MonthlyGoalForm'
+import { WeeklyGoalForm } from './WeeklyGoalForm'
+import { AllGoalTimeframes, Goal } from '@/types/goals'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface CreateGoalDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onGoalCreated: (goalId: string) => void;
-  selectedWeek: Date;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onGoalCreated: (goalId: string) => void
+  timeframe: AllGoalTimeframes
+  selectedWeek?: Date
 }
 
 export function CreateGoalDialog({
   open,
   onOpenChange,
   onGoalCreated,
-  selectedWeek,
+  timeframe,
+  selectedWeek
 }: CreateGoalDialogProps) {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    deadline: format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-    type: 'team' as GoalType,
-  });
+  const titles: Record<AllGoalTimeframes, string> = {
+    annual: 'Create Annual Goal',
+    quarterly: 'Create Quarterly Goal',
+    monthly: 'Create Monthly Goal',
+    weekly: 'Create Weekly Goal'
+  }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!user?.uid || !user?.organizationId) return;
+  const descriptions: Record<AllGoalTimeframes, string> = {
+    annual: 'Set a high-level strategic goal for the year',
+    quarterly: 'Define key objectives for the quarter that align with annual goals',
+    monthly: 'Plan specific deliverables and milestones for the month',
+    weekly: 'Break down tasks into actionable weekly sprints'
+  }
 
-    try {
-      setIsSubmitting(true);
-      const goalId = await createGoal({
-        ...formData,
-        timeframe: 'weekly' as GoalTimeframe,
-        priority: 'medium',
-        status: 'not_started',
-        progress: 0,
-        startDate: selectedWeek,
-        endDate: endOfWeek(selectedWeek, { weekStartsOn: 1 }),
-        metrics: [],
-        keyResults: [],
-        milestones: [],
-        assignees: [],
-        organizationId: user.organizationId,
-        ownerId: user.uid,
-        createdBy: user.uid,
-        tags: []
-      });
+  const handleSuccess = () => {
+    onOpenChange(false)
+  }
 
-      toast({
-        title: 'Goal Created',
-        description: 'Your new goal has been created successfully.',
-      });
-
-      onGoalCreated(goalId);
-      onOpenChange(false);
-      setFormData({
-        title: '',
-        description: '',
-        deadline: format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        type: 'team',
-      });
-    } catch (error) {
-      console.error('Error creating goal:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create goal. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
+  const renderForm = () => {
+    switch (timeframe) {
+      case 'annual':
+        return (
+          <AnnualGoalForm 
+            mode="create"
+            onSuccess={handleSuccess}
+          />
+        )
+      case 'quarterly':
+        return (
+          <QuarterlyGoalForm 
+            mode="create"
+            onSuccess={handleSuccess}
+          />
+        )
+      case 'monthly':
+        return (
+          <MonthlyGoalForm 
+            mode="create"
+            onSuccess={handleSuccess}
+          />
+        )
+      case 'weekly':
+        return (
+          <WeeklyGoalForm 
+            mode="create"
+            initialData={selectedWeek ? {
+              id: '',
+              title: '',
+              description: '',
+              type: 'team',
+              priority: 'medium',
+              status: 'not_started',
+              timeframe: 'weekly',
+              progress: 0,
+              startDate: selectedWeek,
+              endDate: new Date(selectedWeek.getTime() + 6 * 24 * 60 * 60 * 1000),
+              organizationId: '',
+              ownerId: '',
+              createdBy: '',
+              metrics: [],
+              keyResults: [],
+              milestones: [],
+              assignees: [],
+              tags: [],
+              teamRoles: [],
+              createdAt: new Date(),
+              updatedAt: new Date()
+            } : undefined}
+            onComplete={handleSuccess}
+          />
+        )
+      default:
+        return null
     }
-  };
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Goal</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input
-                value={formData.title}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setFormData((prev) => ({ ...prev, title: e.target.value }))
-                }
-                placeholder="Enter goal title"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  setFormData((prev) => ({ ...prev, description: e.target.value }))
-                }
-                placeholder="Enter goal description"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Deadline</label>
-              <Input
-                type="date"
-                value={formData.deadline}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setFormData((prev) => ({ ...prev, deadline: e.target.value }))
-                }
-                min={format(selectedWeek, 'yyyy-MM-dd')}
-                max={format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Type</label>
-              <Select
-                value={formData.type}
-                onValueChange={(value: GoalType) =>
-                  setFormData((prev) => ({ ...prev, type: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select goal type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Weekly">Weekly Goal</SelectItem>
-                  <SelectItem value="Team">Team Goal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Goal'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full min-w-[50vw] sm:w-[60vw] lg:w-[55vw] xl:w-[50vw]">
+        <SheetHeader className="space-y-1">
+          <SheetTitle>{titles[timeframe]}</SheetTitle>
+          <p className="text-muted-foreground">{descriptions[timeframe]}</p>
+        </SheetHeader>
+        <ScrollArea className="h-[calc(100vh-8rem)] mt-6 pr-4">
+          {renderForm()}
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  )
 } 

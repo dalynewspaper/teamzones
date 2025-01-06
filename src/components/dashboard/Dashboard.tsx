@@ -13,7 +13,7 @@ import { VideoRecordingInterface } from '@/components/video/VideoRecordingInterf
 import VideoPageClient from '@/components/video/VideoPageClient'
 import { storage, db } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, getDoc } from 'firebase/firestore'
+import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
 import { WeekNavigator } from './WeekNavigator'
 import { useWeek } from '@/contexts/WeekContext'
@@ -23,6 +23,7 @@ import { EmptyState } from './EmptyState'
 import { NewTeamModal } from './NewTeamModal'
 import { WeeklyGoalsDisplay } from './WeeklyGoalsDisplay'
 import { DashboardContent } from './DashboardContent'
+import { useToast } from '@/components/ui/use-toast'
 
 const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23f1f5f9"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="14" fill="%2394a3b8" text-anchor="middle" dy=".3em"%3EVideo Thumbnail%3C/text%3E%3C/svg%3E'
 
@@ -39,6 +40,9 @@ interface Update {
   createdAt?: string;
   transcription?: string;
   weekId?: string;
+  size?: number;
+  type?: string;
+  organizationId?: string;
 }
 
 interface DashboardProps {
@@ -63,6 +67,7 @@ export function Dashboard({ children }: DashboardProps) {
   const [teams, setTeams] = useState<Team[]>([])
   const [activeTeam, setActiveTeam] = useState<string | null>(null)
   const [isNewTeamModalOpen, setIsNewTeamModalOpen] = useState(false)
+  const { toast } = useToast()
 
   // Load organization name and teams
   const loadTeams = useCallback(async () => {
@@ -150,54 +155,71 @@ export function Dashboard({ children }: DashboardProps) {
     </div>
   )
 
-  // Load videos from Firebase when component mounts or week changes
-  useEffect(() => {
-    const loadVideos = async () => {
-      if (!user || !currentWeek) return
-
-      try {
-        setIsLoading(true)
-        setError(null)
-
-        // Wait a bit to ensure Firestore is initialized
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        const videosQuery = query(
-          collection(db, 'videos'),
-          where('userId', '==', user.uid),
-          where('weekId', '==', currentWeek.id),
-          orderBy('timestamp', 'desc')
-        )
-
-        const querySnapshot = await getDocs(videosQuery)
-        const videos: Update[] = []
-
-        querySnapshot.forEach((doc) => {
-          const data = doc.data()
-          videos.push({
-            id: doc.id,
-            title: data.title || 'Untitled Video',
-            timestamp: data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : new Date().toLocaleString(),
-            duration: data.duration || '0:00',
-            views: data.views || 0,
-            thumbnail: data.thumbnail || placeholderImage,
-            url: data.url || '',
-            isStarred: data.isStarred || false,
-            userId: data.userId,
-            createdAt: data.createdAt || new Date().toISOString(),
-            weekId: data.weekId,
-          })
-        })
-
-        setUpdates(videos)
-      } catch (error) {
-        console.error('Error loading videos:', error)
-        setError('Failed to load videos. Please try again.')
-      } finally {
-        setIsLoading(false)
-      }
+  // Define loadVideos before it's used
+  const loadVideos = async () => {
+    if (!user) {
+      console.log('No user available, skipping video load')
+      return
     }
 
+    if (!currentWeek) {
+      console.log('No current week available, skipping video load')
+      return
+    }
+
+    console.log('Loading videos for week:', {
+      weekId: currentWeek.id,
+      weekNumber: currentWeek.weekNumber,
+      startDate: currentWeek.startDate,
+      endDate: currentWeek.endDate,
+      organizationId: user.organizationId
+    })
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Get the week document directly
+      const weekRef = doc(db, 'weeks', currentWeek.id)
+      const weekDoc = await getDoc(weekRef)
+
+      if (!weekDoc.exists()) {
+        console.log('Week document not found:', currentWeek.id)
+        setUpdates([])
+        return
+      }
+
+      const weekData = weekDoc.data()
+      console.log('Found week document:', weekData)
+
+      // Extract videos from the week document
+      const videos = (weekData.videos || []).map((video: any) => ({
+        id: video.id,
+        title: video.title || 'Untitled Video',
+        timestamp: video.timestamp || video.createdAt || new Date().toISOString(),
+        duration: video.duration || '0:00',
+        views: video.views || 0,
+        thumbnail: video.thumbnail || placeholderImage,
+        url: video.url || '',
+        isStarred: video.isStarred || false,
+        userId: video.userId,
+        createdAt: video.createdAt || new Date().toISOString(),
+        weekId: currentWeek.id,
+        organizationId: video.organizationId
+      }))
+
+      console.log('Found videos:', videos.length)
+      setUpdates(videos)
+    } catch (error) {
+      console.error('Error loading videos:', error)
+      setError('Failed to load videos. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Use loadVideos in useEffect
+  useEffect(() => {
     if (user && currentWeek) {
       loadVideos()
     }
@@ -268,11 +290,32 @@ export function Dashboard({ children }: DashboardProps) {
     })
   }
 
-  const handleRecordingComplete = async (blob: Blob) => {
-    if (!user || !currentWeek) {
-      console.error('No user or week found')
+  const handleRecordingComplete = async (recording: { 
+    blob: Blob;
+    metadata: {
+      duration: string;
+      size: number;
+      type: string;
+      timestamp: string;
+    }
+  }) => {
+    if (!user) {
+      console.error('No user found')
       return
     }
+
+    if (!currentWeek) {
+      console.error('No current week found')
+      return
+    }
+
+    console.log('Recording completed with week:', {
+      weekId: currentWeek.id,
+      weekNumber: currentWeek.weekNumber,
+      startDate: currentWeek.startDate,
+      endDate: currentWeek.endDate,
+      organizationId: user.organizationId
+    })
 
     try {
       setIsProcessing(true)
@@ -280,45 +323,94 @@ export function Dashboard({ children }: DashboardProps) {
       // Generate a unique ID for the video
       const videoId = uuidv4()
       
+      console.log('Uploading video to storage:', {
+        path: `videos/${user.uid}/${videoId}`,
+        size: recording.metadata.size,
+        type: recording.metadata.type
+      })
+
       // Create a reference to the video file in Firebase Storage
-      const storageRef = ref(storage, `videos/${user.uid}/${videoId}.webm`)
+      const storageRef = ref(storage, `videos/${user.uid}/${videoId}`)
       
       // Upload the video blob
-      await uploadBytes(storageRef, blob)
+      await uploadBytes(storageRef, recording.blob)
+      console.log('Video uploaded to storage successfully')
       
       // Get the download URL
       const url = await getDownloadURL(storageRef)
+      console.log('Got download URL:', url)
       
       // Generate and upload thumbnail
-      const thumbnailUrl = await generateThumbnail(blob)
+      const thumbnailUrl = await generateThumbnail(recording.blob)
+      console.log('Generated thumbnail URL:', thumbnailUrl)
+      
+      const now = new Date().toISOString()
       
       // Create the video document
       const videoDoc: Update = {
         id: videoId,
         userId: user.uid,
+        organizationId: user.organizationId || undefined,
         weekId: currentWeek.id,
         title: 'New Recording',
-        timestamp: 'Just now',
-        duration: '0:00',
+        timestamp: now,
+        duration: recording.metadata.duration,
         views: 0,
         thumbnail: thumbnailUrl,
         url: url,
         isStarred: false,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        size: recording.metadata.size,
+        type: recording.metadata.type
       }
+
+      console.log('Saving video document:', videoDoc)
       
-      // Add to Firestore
-      await addDoc(collection(db, 'videos'), {
-        ...videoDoc,
-        timestamp: serverTimestamp(),
-      })
+      // Get the week document
+      const weekRef = doc(db, 'weeks', currentWeek.id)
+      const weekDoc = await getDoc(weekRef)
+
+      if (!weekDoc.exists()) {
+        // Create new week document if it doesn't exist
+        await setDoc(weekRef, {
+          id: currentWeek.id,
+          startDate: currentWeek.startDate,
+          endDate: currentWeek.endDate,
+          status: 'active',
+          videos: [videoDoc],
+          createdAt: now,
+          updatedAt: now
+        })
+      } else {
+        // Update existing week document
+        await updateDoc(weekRef, {
+          videos: arrayUnion(videoDoc),
+          updatedAt: now
+        })
+      }
+
+      console.log('Video saved to week document')
       
       // Update the local state
       setUpdates(prevUpdates => [videoDoc, ...prevUpdates])
       
       setIsRecording(false)
+      toast({
+        title: "Video recorded successfully",
+        description: "Your video update has been published.",
+        duration: 5000,
+      })
+
+      // Reload videos to ensure we have the latest data
+      loadVideos()
     } catch (error) {
       console.error('Error saving recording:', error)
+      toast({
+        title: "Error saving recording",
+        description: "Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      })
     } finally {
       setIsProcessing(false)
     }

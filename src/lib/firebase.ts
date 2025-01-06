@@ -27,13 +27,13 @@ let storage = getStorage(app)
 if (process.env.NODE_ENV === 'development') {
   try {
     // Connect to Auth emulator first
-    connectAuthEmulator(auth, 'http://localhost:9097', { disableWarnings: true })
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
     
     // Then connect to Firestore emulator
-    connectFirestoreEmulator(db, 'localhost', 8087)
+    connectFirestoreEmulator(db, 'localhost', 8089)
     
     // Finally connect to Storage emulator
-    connectStorageEmulator(storage, 'localhost', 9197)
+    connectStorageEmulator(storage, 'localhost', 9199)
     
     // Reinitialize Firebase with emulator settings
     app = getApps()[0]

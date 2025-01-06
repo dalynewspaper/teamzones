@@ -1,3 +1,4 @@
+"use client"
 import { useState } from 'react'
 import { Team, TeamRole, TeamVisibility } from '@/types/teams'
 import { Button } from '@/components/ui/button'

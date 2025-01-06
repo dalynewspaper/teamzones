@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { format } from 'date-fns'
 import { X } from 'lucide-react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { TeamSelector } from './TeamSelector'
@@ -85,14 +85,13 @@ export function RecordingModal({
     
     setIsSaving(true)
     try {
-      const video = await uploadVideo({
-        file: videoBlob,
-        userId: user.uid,
-        teamId: selectedTeamId,
-        weekId: currentWeek.id,
-        title: `Update for ${format(new Date(), 'MMMM d, yyyy')}`
-      })
-      onSave?.(video)
+      await uploadVideo(
+        videoBlob,
+        currentWeek.id,
+        (progress) => {
+          console.log('Upload progress:', progress)
+        }
+      )
       onOpenChange(false)
     } catch (error) {
       console.error('Error saving video:', error)
@@ -125,15 +124,17 @@ export function RecordingModal({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px] bg-white">
-        <div className="space-y-4">
+        <DialogHeader>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Record Update</h2>
+            <DialogTitle>Record Update</DialogTitle>
             <TeamSelector 
               selectedTeamId={selectedTeamId}
               onTeamSelect={setSelectedTeamId}
             />
           </div>
+        </DialogHeader>
 
+        <div className="space-y-4">
           <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
             <video
               ref={videoRef}

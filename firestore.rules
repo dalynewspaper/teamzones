@@ -18,18 +18,15 @@ service cloud.firestore {
              request.auth.uid in org.data.members;
     }
 
-    // Allow access to videos collection
+    // Allow access to videos collection with simplified rules
     match /videos/{videoId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && 
-                   isOrgMember(request.resource.data.organizationId);
-      allow update: if isSignedIn() && 
-                   isOrgMember(resource.data.organizationId) &&
-                   (resource.data.userId == request.auth.uid || 
-                    request.auth.uid in get(/databases/$(database)/documents/organizations/$(resource.data.organizationId)).data.members);
-      allow delete: if isSignedIn() && 
-                   isOrgMember(resource.data.organizationId) &&
-                   resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isOrgMember(resource.data.organizationId)
+      );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // Allow access to teams collection at root level
@@ -74,6 +71,16 @@ service cloud.firestore {
                    isOrgMember(resource.data.organizationId);
       allow delete: if isSignedIn() && 
                    isOrgMember(resource.data.organizationId);
+    }
+
+    // Allow access to weeks collection
+    match /weeks/{weekId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.resource.data.videos.size() == resource.data.videos.size() + 1 ||
+        request.resource.data.updatedAt != resource.data.updatedAt
+      );
     }
   }
 }

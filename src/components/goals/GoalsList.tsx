@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronRight, Flag, Target, Calendar, Users2 } from 'lucide-react'
+import { ChevronRight, Flag, Target, Calendar, Users2, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/utils/dateUtils'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
@@ -19,11 +19,37 @@ interface GoalsListProps {
   onCreateClick: () => void
 }
 
+const emptyStateMessages = [
+  {
+    title: "Ready to Conquer Mountains? 🏔️",
+    description: "Every great achievement starts with a goal. Let's map out your path to success!"
+  },
+  {
+    title: "Dream Big, Plan Smart! 🚀",
+    description: "Turn your vision into reality by setting clear, actionable goals."
+  },
+  {
+    title: "The Journey Begins Here! 🌟",
+    description: "Your team's success story is waiting to be written. Start with your first goal!"
+  },
+  {
+    title: "Time to Make History! 📚",
+    description: "Great teams set great goals. What amazing things will your team achieve?"
+  },
+  {
+    title: "Adventure Awaits! 🗺️",
+    description: "Every milestone starts with a single step. Ready to take yours?"
+  }
+]
+
 export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
   const { user } = useAuth()
   const { dateFormat } = useOrgSettings()
   const [goals, setGoals] = useState<Goal[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [emptyState] = useState(() => 
+    emptyStateMessages[Math.floor(Math.random() * emptyStateMessages.length)]
+  )
 
   useEffect(() => {
     const loadGoals = async () => {
@@ -98,9 +124,15 @@ export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
   if (goals.length === 0) {
     return (
       <Card className="p-12 text-center">
-        <h3 className="text-lg font-medium mb-2">No goals found</h3>
-        <p className="text-muted-foreground mb-6">Get started by creating your first goal</p>
-        <Button onClick={onCreateClick}>
+        <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
+          <Target className="h-10 w-10 text-primary" />
+        </div>
+        <h3 className="text-2xl font-semibold mb-3">{emptyState.title}</h3>
+        <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+          {emptyState.description}
+        </p>
+        <Button onClick={onCreateClick} size="lg" className="gap-2">
+          <Sparkles className="h-4 w-4" />
           Create {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Goal
         </Button>
       </Card>

@@ -15,13 +15,13 @@ export default function WeeklyGoalsPage() {
         <div className="max-w-7xl mx-auto p-4 space-y-6">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-tight">Weekly Goals</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
               <p className="text-sm text-muted-foreground">
-                Manage and track your weekly goals in a Kanban board
+                Manage and track your tasks in a Kanban board
               </p>
             </div>
             <Button onClick={() => setIsCreateSheetOpen(true)}>
-              New Weekly Goal
+              New Task
             </Button>
           </div>
 

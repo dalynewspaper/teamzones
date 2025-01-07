@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle, Target, BarChart3, Activity, ListTodo, MessageSquare, BarChart } from 'lucide-react'
+import { Search, Video, Star, Inbox, MoreVertical, Home, Settings, Users, Clock, ChevronDown, Plus, LogOut, XCircle, Target, BarChart3, Activity, ListTodo, MessageSquare, BarChart, Circle } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
@@ -428,9 +428,9 @@ export function Dashboard({ children }: DashboardProps) {
   }
 
   const navigation = [
-    { name: 'Home', href: '/dashboard', icon: Home },
+    { name: 'Weekly Updates', href: '/dashboard', icon: Video },
+    { name: 'Tasks', href: '/dashboard/goals/weekly', icon: ListTodo },
     { name: 'Strategic Goals', href: '/dashboard/goals', icon: Target },
-    { name: 'Weekly Goals', href: '/dashboard/goals/weekly', icon: ListTodo },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings }
   ]
 
@@ -439,7 +439,7 @@ export function Dashboard({ children }: DashboardProps) {
       {/* Sidebar - fixed */}
       <div className="w-64 border-r bg-white flex flex-col h-screen flex-shrink-0">
         {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-gray-200">
+        <div className="h-[88px] flex items-center px-4 border-b border-gray-200">
           <Link href="/" className="flex items-center">
             <Image 
               src="/logo.svg" 
@@ -505,28 +505,6 @@ export function Dashboard({ children }: DashboardProps) {
 
       {/* Main content area - scrollable */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Top navbar - fixed */}
-        <div className="h-16 border-b bg-white flex items-center justify-between px-6 flex-shrink-0">
-          <div className="flex items-center flex-1 space-x-4">
-            <div className="relative w-96">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                type="text"
-                placeholder="Search updates..."
-                className="pl-10 w-full bg-gray-50 border-0"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <Button
-            onClick={() => setIsRecording(true)}
-            className="bg-[#4263EB] hover:bg-[#3b5bdb] text-white"
-          >
-            <Video className="mr-2 h-4 w-4" /> Record Update
-          </Button>
-        </div>
-
         {/* Week navigator bar - only show on home screen */}
         {pathname === '/dashboard' && (
           <div className="h-[88px] border-b bg-white flex items-center px-6 flex-shrink-0">

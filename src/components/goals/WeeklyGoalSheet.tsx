@@ -19,7 +19,7 @@ export function WeeklyGoalSheet({ isOpen, onClose }: WeeklyGoalSheetProps) {
             <Button variant="ghost" size="icon" onClick={onClose} className="mr-2">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <SheetTitle>Create Weekly Goal</SheetTitle>
+            <SheetTitle>Create Task</SheetTitle>
           </div>
         </SheetHeader>
         <div className="py-6">

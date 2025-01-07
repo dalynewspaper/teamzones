@@ -541,9 +541,9 @@ export function WeeklyGoalsKanban({ onAddClick }: WeeklyGoalsKanbanProps) {
       {/* Enhanced Header with Stats */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold">Weekly Goals</h2>
+          <h2 className="text-xl font-semibold">Tasks</h2>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{filteredGoals.length} goals</span>
+            <span>{filteredGoals.length} tasks</span>
             <span>•</span>
             <span>{filteredGoals.filter(g => g.status === 'completed').length} completed</span>
           </div>

@@ -289,6 +289,15 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
       // Close the form and redirect
       onComplete?.()
       router.push('/dashboard/goals/weekly')
+
+      // Show success toast
+      toast({
+        title: mode === 'create' ? 'Task Created' : 'Task Updated',
+        description: mode === 'create' 
+          ? 'Task created successfully.'
+          : 'Task updated successfully.',
+        duration: 5000,
+      })
     } catch (error) {
       console.error('Error saving goal:', error)
       toast({

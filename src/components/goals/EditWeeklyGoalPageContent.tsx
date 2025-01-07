@@ -52,10 +52,12 @@ export function EditWeeklyGoalPageContent({ goalId }: EditWeeklyGoalPageContentP
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Edit Weekly Goal</h1>
-        <p className="text-muted-foreground">
-          Update your weekly goal details and progress.
-        </p>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold">Edit Task</h1>
+          <p className="text-muted-foreground">
+            Update your task details and progress.
+          </p>
+        </div>
       </div>
       <WeeklyGoalForm 
         mode="edit"

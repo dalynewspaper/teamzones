@@ -23,9 +23,9 @@ export default function CreateWeeklyGoalPage() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight">Create Weekly Goal</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">Create Task</h1>
                 <p className="text-sm text-muted-foreground">
-                  Create a new weekly goal for your team
+                  Create a new task for your team
                 </p>
               </div>
             </div>

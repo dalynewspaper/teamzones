@@ -108,22 +108,22 @@ export function WeeklyGoalsDisplay() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Weekly Goals</h2>
+        <h2 className="text-lg font-semibold">Tasks</h2>
         <Link href={`/dashboard/goals/weekly/create?week=${currentWeek.id}`}>
           <Button variant="outline" size="sm">
             <Plus className="h-4 w-4 mr-2" />
-            Add Goal
+            Add Task
           </Button>
         </Link>
       </div>
 
       {goals.length === 0 ? (
         <Card className="p-6 text-center">
-          <p className="text-muted-foreground">No goals set for this week.</p>
+          <p className="text-muted-foreground">No tasks set for this week.</p>
           <Link href={`/dashboard/goals/weekly/create?week=${currentWeek.id}`}>
             <Button variant="outline" className="mt-4">
               <Plus className="h-4 w-4 mr-2" />
-              Set Weekly Goals
+              Set Tasks
             </Button>
           </Link>
         </Card>

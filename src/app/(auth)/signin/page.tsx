@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { GoogleButton } from '@/components/auth/GoogleButton'
 import { MicrosoftButton } from '@/components/auth/MicrosoftButton'
@@ -12,13 +12,15 @@ export default function SignInPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState<'google' | 'microsoft' | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirect = searchParams.get('redirect') || '/dashboard'
   const { authenticateWithGoogle, authenticateWithMicrosoft } = useAuth()
 
   const handleGoogleSignIn = async () => {
     setIsLoading('google')
     try {
       await authenticateWithGoogle()
-      router.push('/dashboard')
+      router.push(redirect)
     } catch (err) {
       console.error('Authentication error:', err)
       setError('An unexpected error occurred. Please try again.')
@@ -31,7 +33,7 @@ export default function SignInPage() {
     setIsLoading('microsoft')
     try {
       await authenticateWithMicrosoft()
-      router.push('/dashboard')
+      router.push(redirect)
     } catch (err) {
       console.error('Authentication error:', err)
       setError('An unexpected error occurred. Please try again.')

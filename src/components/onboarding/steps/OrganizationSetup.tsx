@@ -7,6 +7,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { fetchBrandInfo } from '@/services/brandService'
 import Image from 'next/image'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { doc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
 const COMMON_EMAIL_PROVIDERS = new Set([
   'gmail.com',
@@ -122,14 +124,20 @@ export function OrganizationSetup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user?.organizationId) return
 
     try {
       setLoading(true)
       setError(null)
 
-      // Store organization data in context or state management
-      // We'll create the organization in the next step along with the team
+      // Update the organization document directly
+      const orgRef = doc(db, 'organizations', user.organizationId)
+      await updateDoc(orgRef, {
+        name: orgData.name,
+        domain: orgData.domain
+      })
+
+      // Complete the onboarding step
       completeStep('organization')
     } catch (err) {
       console.error('Setup error:', err)
@@ -140,7 +148,7 @@ export function OrganizationSetup() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 relative bg-white">
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">Organization Setup</h3>
@@ -226,7 +234,12 @@ export function OrganizationSetup() {
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button 
+        type="submit" 
+        className="w-full relative z-10" 
+        variant="default"
+        disabled={loading}
+      >
         {loading ? 'Saving...' : 'Continue'}
       </Button>
     </form>

@@ -6,36 +6,15 @@ import { OrganizationSetup } from './steps/OrganizationSetup'
 import { FirstUpdate } from './steps/FirstUpdate'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const STEPS = [
-  { 
-    id: 'user-info',
-    title: 'Welcome to Open Async',
-    subtitle: "Let's personalize your experience",
-    icon: '👋'
-  },
-  { 
-    id: 'organization',
-    title: 'Set Up Your Workspace',
-    subtitle: 'Create a home for your team',
-    icon: '🏢'
-  },
-  { 
-    id: 'first-update',
-    title: 'Share Your First Update',
-    subtitle: 'Connect with your team async-style',
-    icon: '🎥'
-  }
-]
-
 export function OnboardingModal() {
-  const { currentStep, isComplete, showOnboarding } = useOnboarding()
+  const { currentStep, isComplete, showOnboarding, steps } = useOnboarding()
 
   if (isComplete || !showOnboarding) {
     return null
   }
 
-  const currentStepIndex = STEPS.findIndex(step => step.id === currentStep)
-  const currentStepInfo = STEPS[currentStepIndex]
+  const currentStepIndex = steps.findIndex(step => step.id === currentStep)
+  const currentStepInfo = steps[currentStepIndex]
 
   return (
     <Dialog open={true}>
@@ -52,7 +31,7 @@ export function OnboardingModal() {
           <motion.div
             className="h-full bg-gradient-to-r from-blue-600 to-blue-400"
             initial={{ width: '0%' }}
-            animate={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }}
+            animate={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
             transition={{ duration: 0.8, ease: [0.4, 0.0, 0.2, 1] }}
           />
         </div>
@@ -78,7 +57,7 @@ export function OnboardingModal() {
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
               >
-                Step {currentStepIndex + 1} of {STEPS.length}
+                Step {currentStepIndex + 1} of {steps.length}
               </motion.div>
               <motion.h2
                 id="onboarding-description"
@@ -101,7 +80,7 @@ export function OnboardingModal() {
 
           {/* Steps Navigation */}
           <div className="flex justify-between mb-20 px-16">
-            {STEPS.map((step, index) => (
+            {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <motion.div 
                   className={`
@@ -120,7 +99,7 @@ export function OnboardingModal() {
                 >
                   {index < currentStepIndex ? '✓' : index + 1}
                 </motion.div>
-                {index < STEPS.length - 1 && (
+                {index < steps.length - 1 && (
                   <div className="relative w-48 mx-6">
                     <div className="absolute top-1/2 w-full h-[2px] bg-gray-100" />
                     <motion.div 

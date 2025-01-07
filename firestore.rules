@@ -11,11 +11,16 @@ service cloud.firestore {
     }
 
     function isOrgMember(orgId) {
-      let org = get(/databases/$(database)/documents/organizations/$(orgId));
       return isSignedIn() && 
              exists(/databases/$(database)/documents/organizations/$(orgId)) &&
-             org.data.members != null &&
-             request.auth.uid in org.data.members;
+             get(/databases/$(database)/documents/organizations/$(orgId)).data.members != null &&
+             request.auth.uid in get(/databases/$(database)/documents/organizations/$(orgId)).data.members;
+    }
+
+    function hasMatchingDomain(orgId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+             get(/databases/$(database)/documents/organizations/$(orgId)).data.domain == request.auth.token.email.split('@')[1];
     }
 
     // Allow access to videos collection with simplified rules
@@ -55,9 +60,13 @@ service cloud.firestore {
                    request.resource.data.ownerId == request.auth.uid &&
                    request.resource.data.members != null &&
                    request.auth.uid in request.resource.data.members;
-      allow update: if isSignedIn() && 
-                   (isOwner(resource.data.ownerId) || 
-                   request.auth.uid in resource.data.members);
+      allow update: if isSignedIn() && (
+        isOwner(resource.data.ownerId) || 
+        // Allow users with matching domain to join
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
+        hasMatchingDomain(orgId) &&
+        request.resource.data.members.hasAll(resource.data.members))
+      );
       allow delete: if false;
     }
 
@@ -81,6 +90,28 @@ service cloud.firestore {
         request.resource.data.videos.size() == resource.data.videos.size() + 1 ||
         request.resource.data.updatedAt != resource.data.updatedAt
       );
+    }
+
+    // Allow access to invites collection
+    match /invites/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                   isOrgMember(request.resource.data.organizationId);
+      allow update: if isSignedIn() && 
+                   isOrgMember(resource.data.organizationId);
+      allow delete: if isSignedIn() && 
+                   isOrgMember(resource.data.organizationId);
+    }
+
+    // Allow access to invite links collection
+    match /inviteLinks/{linkId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                   isOrgMember(request.resource.data.organizationId);
+      allow update: if isSignedIn() && 
+                   isOrgMember(resource.data.organizationId);
+      allow delete: if isSignedIn() && 
+                   isOrgMember(resource.data.organizationId);
     }
   }
 }

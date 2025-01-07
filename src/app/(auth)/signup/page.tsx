@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOnboarding } from '@/contexts/OnboardingContext'
 import { GoogleButton } from '@/components/auth/GoogleButton'
@@ -14,6 +14,8 @@ export default function SignUpPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState<'google' | 'microsoft' | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirect = searchParams.get('redirect')
   const { authenticateWithGoogle, authenticateWithMicrosoft } = useAuth()
   const { refreshOnboarding } = useOnboarding()
 
@@ -28,7 +30,7 @@ export default function SignUpPage() {
           ...(user.photoURL ? { photoURL: user.photoURL } : {}),
           onboardingCompleted: false
         })
-        router.replace('/dashboard?onboarding=true')
+        router.replace(redirect || '/dashboard?onboarding=true')
       }
     } catch (err) {
       console.error('Authentication error:', err)
@@ -49,7 +51,7 @@ export default function SignUpPage() {
           ...(user.photoURL ? { photoURL: user.photoURL } : {}),
           onboardingCompleted: false
         })
-        router.replace('/dashboard?onboarding=true')
+        router.replace(redirect || '/dashboard?onboarding=true')
       }
     } catch (err) {
       console.error('Authentication error:', err)

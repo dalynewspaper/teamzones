@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import { getUserProfile, updateUserProfile } from '@/services/userService'
+import { useSearchParams } from 'next/navigation'
 
 type OnboardingStep = 'user-info' | 'organization' | 'first-update'
 
@@ -11,18 +12,45 @@ interface OnboardingContextType {
   isComplete: boolean
   showOnboarding: boolean
   refreshOnboarding: () => Promise<void>
+  steps: { id: OnboardingStep; title: string; subtitle: string; icon: string }[]
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
 
-const ONBOARDING_STEPS: OnboardingStep[] = ['user-info', 'organization', 'first-update']
+const DEFAULT_STEPS = [
+  { 
+    id: 'user-info' as const,
+    title: 'Welcome to Open Async',
+    subtitle: "Let's personalize your experience",
+    icon: '👋'
+  },
+  { 
+    id: 'organization' as const,
+    title: 'Set Up Your Workspace',
+    subtitle: 'Create a home for your team',
+    icon: '🏢'
+  },
+  { 
+    id: 'first-update' as const,
+    title: 'Share Your First Update',
+    subtitle: 'Connect with your team async-style',
+    icon: '🎥'
+  }
+]
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('token')
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('user-info')
   const [isComplete, setIsComplete] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
+
+  // Filter out organization step for invited users
+  const steps = inviteToken 
+    ? DEFAULT_STEPS.filter(step => step.id !== 'organization')
+    : DEFAULT_STEPS
 
   const checkOnboardingStatus = async () => {
     if (!user) {
@@ -37,8 +65,18 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setIsChecking(true)
       const profile = await getUserProfile(user.uid)
       
-      if (!profile || !profile.onboardingCompleted) {
-        // Immediately show onboarding for new users or incomplete onboarding
+      // If user has an invite token, mark onboarding as complete
+      if (inviteToken) {
+        setShowOnboarding(false)
+        setIsComplete(true)
+        if (!profile?.onboardingCompleted) {
+          await updateUserProfile(user.uid, {
+            onboardingCompleted: true,
+            updatedAt: new Date().toISOString()
+          })
+        }
+      } else if (!profile || !profile.onboardingCompleted) {
+        // Only show onboarding for new users without invite
         setShowOnboarding(true)
         setIsComplete(false)
         setCurrentStep('user-info')
@@ -49,10 +87,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
     } catch (error) {
       console.error('Error checking onboarding status:', error)
-      // Show onboarding on error to be safe
-      setShowOnboarding(true)
-      setIsComplete(false)
-      setCurrentStep('user-info')
+      // Show onboarding on error only if no invite token
+      if (!inviteToken) {
+        setShowOnboarding(true)
+        setIsComplete(false)
+        setCurrentStep('user-info')
+      }
     } finally {
       setIsChecking(false)
     }
@@ -69,12 +109,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }
 
   const completeStep = async (step: OnboardingStep) => {
-    const currentIndex = ONBOARDING_STEPS.indexOf(step)
+    const currentIndex = steps.findIndex(s => s.id === step)
     if (currentIndex === -1) return
 
-    const nextStep = ONBOARDING_STEPS[currentIndex + 1]
+    const nextStep = steps[currentIndex + 1]
     if (nextStep) {
-      setCurrentStep(nextStep)
+      setCurrentStep(nextStep.id)
     } else {
       setIsComplete(true)
       setShowOnboarding(false)
@@ -97,7 +137,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       completeStep, 
       isComplete, 
       showOnboarding,
-      refreshOnboarding: checkOnboardingStatus 
+      refreshOnboarding: checkOnboardingStatus,
+      steps: steps as { id: OnboardingStep; title: string; subtitle: string; icon: string; }[]
     }}>
       {children}
     </OnboardingContext.Provider>

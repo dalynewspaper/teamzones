@@ -1,14 +1,14 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { auth, db } from '@/lib/firebase'
 import { User } from 'firebase/auth'
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
 import { MicrosoftAuthProvider } from '@/lib/microsoft-auth'
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, setDoc, onSnapshot } from 'firebase/firestore'
 import { createDefaultTeam, getGeneralTeam } from '@/services/teamService'
 
-interface ExtendedUser {
+export interface ExtendedUser {
   uid: string
   email: string | null
   displayName: string | null
@@ -18,7 +18,7 @@ interface ExtendedUser {
   defaultTeam?: string
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: ExtendedUser | null
   loading: boolean
   authenticateWithGoogle: (organizationDetails?: { name: string; domain: string }) => Promise<User | null>
@@ -31,9 +31,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ExtendedUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const unsubscribersRef = useRef<(() => void)[]>([])
+
+  const cleanupListeners = useCallback(() => {
+    unsubscribersRef.current.forEach(unsubscribe => unsubscribe())
+    unsubscribersRef.current = []
+  }, [])
 
   const updateUserState = useCallback(async (firebaseUser: User | null) => {
     try {
+      // Clean up existing listeners when user state changes
+      cleanupListeners()
+
       if (!firebaseUser) {
         setUser(null)
         return
@@ -50,22 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fetch updated user data
         const updatedUserSnap = await getDoc(userRef)
         userData = updatedUserSnap.exists() ? updatedUserSnap.data() : null
-      } else {
-        // Ensure user is in General team
-        const generalTeam = await getGeneralTeam(userData.organizationId)
-        if (generalTeam && !generalTeam.members.some(m => m.userId === firebaseUser.uid)) {
-          await updateDoc(doc(db, `teams/${generalTeam.id}`), {
-            members: [...generalTeam.members, {
-              userId: firebaseUser.uid,
-              role: 'member',
-              joinedAt: new Date().toISOString()
-            }]
-          })
-        }
       }
 
-      // Set user state once with all data
-      setUser({
+      // Set initial user state
+      const initialUserState = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
@@ -73,19 +70,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         organizationId: userData?.organizationId || null,
         teams: userData?.teams || [],
         defaultTeam: userData?.defaultTeam
+      }
+      setUser(initialUserState)
+
+      // Set up real-time listener for user document
+      const userUnsubscribe = onSnapshot(userRef, (doc) => {
+        if (doc.exists()) {
+          const data = doc.data()
+          setUser(prev => {
+            if (!prev) return initialUserState
+            return {
+              ...prev,
+              organizationId: data.organizationId || null,
+              teams: data.teams || [],
+              defaultTeam: data.defaultTeam
+            }
+          })
+        }
+      }, (error) => {
+        console.error('Error in user listener:', error)
       })
+
+      unsubscribersRef.current.push(userUnsubscribe)
     } catch (error) {
       console.error('Error updating user state:', error)
       setUser(null)
     }
-  }, [])
+  }, [cleanupListeners])
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined
+    let authUnsubscribe: (() => void) | undefined
 
     const initializeAuth = async () => {
       try {
-        unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        authUnsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
           try {
             await updateUserState(firebaseUser)
           } catch (error) {
@@ -104,17 +122,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth()
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe()
+      if (authUnsubscribe) {
+        authUnsubscribe()
       }
+      cleanupListeners()
     }
-  }, [updateUserState])
+  }, [updateUserState, cleanupListeners])
 
   const handleUserWorkspace = async (user: User, organizationDetails?: { name: string; domain: string }) => {
     if (!user.email) return
 
     const domain = organizationDetails?.domain || user.email.split('@')[1]
-    const companyName = organizationDetails?.name || domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1)
     
     try {
       // Create or get user document first
@@ -126,12 +144,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const workspaceSnapshot = await getDocs(q)
 
       let organizationId: string
-      let defaultTeamId: string
 
       if (workspaceSnapshot.empty) {
-        // Create new workspace with provided or default name
+        // Create new workspace with provided name
         const workspaceDoc = await addDoc(workspacesRef, {
-          name: `${companyName}`,
+          name: organizationDetails?.name || 'My Workspace',
           domain,
           ownerId: user.uid,
           createdAt: new Date().toISOString(),
@@ -141,54 +158,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Create General team
         const generalTeam = await createDefaultTeam(organizationId, user.uid)
-        defaultTeamId = generalTeam.id
+
+        // Create or update user document with workspace info
+        await setDoc(userRef, {
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          organizationId,
+          teams: [generalTeam.id],
+          defaultTeam: generalTeam.id,
+          createdAt: new Date().toISOString()
+        }, { merge: true })
       } else {
         // Join existing workspace
         const workspace = workspaceSnapshot.docs[0]
         organizationId = workspace.id
 
-        // Add user to workspace members
+        // Get the general team first
+        const generalTeam = await getGeneralTeam(organizationId)
+        if (!generalTeam) {
+          throw new Error('General team not found')
+        }
+
+        // Create or update user document with workspace and team info first
+        await setDoc(userRef, {
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          organizationId,
+          teams: [generalTeam.id],
+          defaultTeam: generalTeam.id,
+          createdAt: new Date().toISOString()
+        }, { merge: true })
+
+        // Then add user to workspace members
         const members = workspace.data().members || []
         if (!members.includes(user.uid)) {
           await updateDoc(workspace.ref, {
             members: [...members, user.uid]
           })
         }
-
-        // Get or create General team
-        const generalTeam = await getGeneralTeam(organizationId)
-        if (!generalTeam) {
-          // Create General team if it doesn't exist
-          const newGeneralTeam = await createDefaultTeam(organizationId, user.uid)
-          defaultTeamId = newGeneralTeam.id
-        } else {
-          defaultTeamId = generalTeam.id
-          
-          // Add user to General team if not already a member
-          if (!generalTeam.members.some(m => m.userId === user.uid)) {
-            await updateDoc(doc(db, `organizations/${organizationId}/teams/${generalTeam.id}`), {
-              members: [...generalTeam.members, {
-                userId: user.uid,
-                role: 'member',
-                joinedAt: new Date().toISOString()
-              }]
-            })
-          }
-        }
       }
 
-      // Create or update user document with workspace and team info
-      await setDoc(userRef, {
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        organizationId,
-        teams: [defaultTeamId],
-        defaultTeam: defaultTeamId,
-        createdAt: new Date().toISOString()
-      }, { merge: true })
-
-      return { organizationId, defaultTeamId }
+      return { organizationId }
     } catch (error) {
       console.error('Error handling workspace:', error)
       throw error
@@ -226,12 +238,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       try {
+        // Clean up listeners before signing out
+        cleanupListeners()
+        // Set user to null before signing out to prevent permission errors
+        setUser(null)
+        // Then sign out
         await signOut(auth)
       } catch (error) {
         console.error('Sign out error:', error)
       }
     }
-  }), [user, loading])
+  }), [user, loading, cleanupListeners])
 
   return (
     <AuthContext.Provider value={contextValue}>
@@ -240,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')

@@ -13,11 +13,11 @@ import { VideoRecordingInterface } from '@/components/video/VideoRecordingInterf
 import VideoPageClient from '@/components/video/VideoPageClient'
 import { storage, db } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { doc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, getDoc, setDoc, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
 import { WeekNavigator } from './WeekNavigator'
 import { useWeek } from '@/contexts/WeekContext'
-import { getTeams } from '@/services/teamService'
+import { getTeams, subscribeToTeams } from '@/services/teamService'
 import { Team } from '@/types/teams'
 import { EmptyState } from './EmptyState'
 import { NewTeamModal } from './NewTeamModal'
@@ -70,53 +70,54 @@ export function Dashboard({ children }: DashboardProps) {
   const { toast } = useToast()
 
   // Load organization name and teams
-  const loadTeams = useCallback(async () => {
-    if (!user?.organizationId || !user?.uid) return
-    try {
-      const userTeams = await getTeams(user.organizationId)
-      setTeams(userTeams)
-      
-      if (userTeams.length > 0 && !activeTeam) {
-        const defaultTeam = userTeams.find(t => t.isDefault)
-        setActiveTeam(defaultTeam?.id || userTeams[0].id)
-      }
-    } catch (error) {
-      console.error('Error loading teams:', error)
-    }
-  }, [user?.organizationId, user?.uid, activeTeam])
-
-  // Load organization name and teams when component mounts
   useEffect(() => {
     const loadOrganizationAndTeams = async () => {
       if (!user?.organizationId) return
 
       try {
-        // Load organization
+        setIsLoading(true)
+        
+        // Subscribe to organization updates
         const orgRef = doc(db, 'organizations', user.organizationId)
-        const orgSnap = await getDoc(orgRef)
-        if (orgSnap.exists()) {
-          setOrganizationName(orgSnap.data().name)
-        }
+        const unsubOrg = onSnapshot(orgRef, (snapshot) => {
+          if (snapshot.exists()) {
+            setOrganizationName(snapshot.data().name)
+          }
+        })
 
-        // Load teams
-        await loadTeams()
+        // Subscribe to teams updates
+        const unsubTeams = subscribeToTeams(user.organizationId, (userTeams: Team[]) => {
+          setTeams(userTeams)
+          if (userTeams.length > 0 && !activeTeam) {
+            const defaultTeam = userTeams.find((t: Team) => t.isDefault) || userTeams[0]
+            setActiveTeam(defaultTeam.id)
+          }
+        })
+
+        setIsLoading(false)
+
+        // Cleanup subscriptions
+        return () => {
+          unsubOrg()
+          unsubTeams()
+        }
       } catch (error) {
         console.error('Error loading organization and teams:', error)
+        setIsLoading(false)
       }
     }
 
     loadOrganizationAndTeams()
-  }, [user?.organizationId, loadTeams])
+  }, [user?.organizationId, activeTeam])
 
   // Handle team selection
   const handleTeamSelect = useCallback((teamId: string) => {
     setActiveTeam(teamId)
   }, [])
 
-  const handleTeamCreated = useCallback(async () => {
-    await loadTeams()
+  const handleTeamCreated = useCallback(() => {
     setIsNewTeamModalOpen(false)
-  }, [loadTeams])
+  }, [])
 
   // Teams Section JSX
   const teamsSection = (
@@ -218,12 +219,17 @@ export function Dashboard({ children }: DashboardProps) {
     }
   }
 
-  // Use loadVideos in useEffect
+  // Load videos when week changes
   useEffect(() => {
-    if (user && currentWeek) {
-      loadVideos()
-    }
-  }, [user, currentWeek])
+    if (!user?.organizationId || !currentWeek?.id) return
+    loadVideos()
+  }, [currentWeek?.id, filter, searchQuery, user?.organizationId])
+
+  // Load videos when active team changes
+  useEffect(() => {
+    if (!user?.organizationId || !currentWeek?.id || !activeTeam) return
+    loadVideos()
+  }, [activeTeam])
 
   const handleSignOut = async () => {
     try {

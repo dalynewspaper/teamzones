@@ -44,7 +44,7 @@ export function UserInfo() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 relative bg-white">
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">Your Information</h3>
@@ -95,7 +95,12 @@ export function UserInfo() {
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button 
+        type="submit" 
+        className="w-full relative z-10" 
+        variant="default"
+        disabled={loading}
+      >
         {loading ? 'Saving...' : 'Continue'}
       </Button>
     </form>

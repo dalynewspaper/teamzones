@@ -64,7 +64,192 @@ interface FormData {
     blockers?: string[]
     nextSteps?: string[]
   }
+  hypothesis?: string
+  expectedOutcome?: string
+  experimentSteps?: string[]
+  metrics?: {
+    name: string
+    target: number
+    unit: string
+    current?: number
+  }[]
+  suggestedExperiments?: {
+    title: string
+    description: string
+    hypothesis: string
+    steps: string[]
+    metrics: {
+      name: string
+      target: number
+      unit: string
+    }[]
+  }[]
 }
+
+const DOMAIN_TEMPLATES = {
+  marketing: {
+    templates: [
+      {
+        title: "Email Campaign Optimization",
+        hypothesis: "By personalizing email subject lines based on user behavior, we can increase open rates by 25%",
+        expectedOutcome: "Increased email open rates and click-through rates",
+        metrics: [
+          { name: "Email Open Rate", target: 25, unit: "percentage" },
+          { name: "Click-through Rate", target: 10, unit: "percentage" },
+          { name: "Conversion Rate", target: 5, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Social Media Engagement",
+        hypothesis: "By posting content at optimal times with targeted hashtags, we can increase engagement by 40%",
+        expectedOutcome: "Higher social media engagement and follower growth",
+        metrics: [
+          { name: "Post Engagement Rate", target: 40, unit: "percentage" },
+          { name: "Follower Growth", target: 500, unit: "followers" },
+          { name: "Click-through Rate", target: 15, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Content Marketing ROI",
+        hypothesis: "By creating industry-specific whitepapers, we can increase lead quality score by 35%",
+        expectedOutcome: "Higher quality leads and improved content ROI",
+        metrics: [
+          { name: "Lead Quality Score", target: 35, unit: "points" },
+          { name: "Content Download Rate", target: 20, unit: "percentage" },
+          { name: "Lead Conversion Rate", target: 8, unit: "percentage" }
+        ]
+      },
+      {
+        title: "PPC Campaign Optimization",
+        hypothesis: "By implementing AI-driven bid management, we can reduce cost per acquisition by 30%",
+        expectedOutcome: "Lower acquisition costs and improved ad spend efficiency",
+        metrics: [
+          { name: "Cost per Acquisition", target: -30, unit: "percentage" },
+          { name: "Click-through Rate", target: 25, unit: "percentage" },
+          { name: "Conversion Rate", target: 12, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Website Conversion Rate",
+        hypothesis: "By implementing personalized CTAs, we can increase landing page conversion by 40%",
+        expectedOutcome: "Improved website conversion rates and user engagement",
+        metrics: [
+          { name: "Landing Page Conversion", target: 40, unit: "percentage" },
+          { name: "Time on Page", target: 45, unit: "seconds" },
+          { name: "Bounce Rate", target: -25, unit: "percentage" }
+        ]
+      }
+    ]
+  },
+  sales: {
+    templates: [
+      {
+        title: "Lead Qualification Process",
+        hypothesis: "By implementing a new lead scoring system, we can increase qualified lead conversion by 30%",
+        expectedOutcome: "Higher conversion rate of qualified leads to customers",
+        metrics: [
+          { name: "Lead Qualification Rate", target: 30, unit: "percentage" },
+          { name: "Sales Cycle Duration", target: -20, unit: "days" },
+          { name: "Conversion Rate", target: 15, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Sales Outreach Optimization",
+        hypothesis: "By personalizing sales outreach based on industry verticals, we can increase response rates by 40%",
+        expectedOutcome: "Improved response rates and meeting bookings",
+        metrics: [
+          { name: "Response Rate", target: 40, unit: "percentage" },
+          { name: "Meeting Booking Rate", target: 25, unit: "percentage" },
+          { name: "Deal Size", target: 20, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Deal Velocity Improvement",
+        hypothesis: "By streamlining the proposal process, we can reduce sales cycle length by 35%",
+        expectedOutcome: "Faster deal closure and improved pipeline velocity",
+        metrics: [
+          { name: "Sales Cycle Length", target: -35, unit: "percentage" },
+          { name: "Proposal Acceptance Rate", target: 30, unit: "percentage" },
+          { name: "Pipeline Velocity", target: 40, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Customer Success Alignment",
+        hypothesis: "By involving customer success early in deals, we can increase first-year retention by 25%",
+        expectedOutcome: "Improved customer retention and reduced churn",
+        metrics: [
+          { name: "First-year Retention", target: 25, unit: "percentage" },
+          { name: "Implementation Success", target: 95, unit: "percentage" },
+          { name: "Customer Satisfaction", target: 9, unit: "score" }
+        ]
+      },
+      {
+        title: "Account Expansion Strategy",
+        hypothesis: "By implementing quarterly business reviews, we can increase upsell revenue by 40%",
+        expectedOutcome: "Higher revenue from existing accounts",
+        metrics: [
+          { name: "Upsell Revenue", target: 40, unit: "percentage" },
+          { name: "Account Expansion Rate", target: 30, unit: "percentage" },
+          { name: "Customer Lifetime Value", target: 35, unit: "percentage" }
+        ]
+      }
+    ]
+  },
+  product: {
+    templates: [
+      {
+        title: "Feature Adoption",
+        hypothesis: "By implementing in-app tutorials, we can increase new feature adoption by 50%",
+        expectedOutcome: "Higher feature adoption rates and user engagement",
+        metrics: [
+          { name: "Feature Adoption Rate", target: 50, unit: "percentage" },
+          { name: "Time to First Use", target: -30, unit: "minutes" },
+          { name: "User Satisfaction", target: 8, unit: "score" }
+        ]
+      },
+      {
+        title: "User Onboarding Optimization",
+        hypothesis: "By implementing an interactive walkthrough, we can increase activation rate by 45%",
+        expectedOutcome: "Improved user activation and reduced time-to-value",
+        metrics: [
+          { name: "User Activation Rate", target: 45, unit: "percentage" },
+          { name: "Time to Value", target: -40, unit: "percentage" },
+          { name: "Onboarding Completion", target: 85, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Performance Optimization",
+        hypothesis: "By implementing lazy loading, we can reduce page load time by 60%",
+        expectedOutcome: "Improved application performance and user experience",
+        metrics: [
+          { name: "Page Load Time", target: -60, unit: "percentage" },
+          { name: "User Engagement", target: 30, unit: "percentage" },
+          { name: "Bounce Rate", target: -25, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Mobile Experience",
+        hypothesis: "By redesigning mobile navigation, we can increase mobile user retention by 35%",
+        expectedOutcome: "Better mobile experience and increased mobile usage",
+        metrics: [
+          { name: "Mobile Retention", target: 35, unit: "percentage" },
+          { name: "Mobile Session Length", target: 25, unit: "percentage" },
+          { name: "Mobile Conversion", target: 20, unit: "percentage" }
+        ]
+      },
+      {
+        title: "Error Rate Reduction",
+        hypothesis: "By implementing predictive error handling, we can reduce error rates by 70%",
+        expectedOutcome: "Improved system reliability and user satisfaction",
+        metrics: [
+          { name: "Error Rate", target: -70, unit: "percentage" },
+          { name: "Support Tickets", target: -40, unit: "percentage" },
+          { name: "User Satisfaction", target: 30, unit: "percentage" }
+        ]
+      }
+    ]
+  }
+} as const;
 
 export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalFormProps) {
   const router = useRouter()
@@ -162,7 +347,11 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
     endDate: initialData?.endDate ? format(new Date(initialData.endDate), 'yyyy-MM-dd') : format(addDays(selectedWeek, 6), 'yyyy-MM-dd'),
     status: initialData?.status || 'not_started',
     progress: initialData?.progress || 0,
-    assignees: initialData?.assignees || []
+    assignees: initialData?.assignees || [],
+    hypothesis: initialData?.hypothesis || '',
+    expectedOutcome: initialData?.expectedOutcome || '',
+    experimentSteps: initialData?.experimentSteps || [],
+    metrics: initialData?.metrics || []
   })
 
   const [teams, setTeams] = useState<Team[]>([])
@@ -327,8 +516,9 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
         formData.description,
         `Weekly (${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')})`,
         {
-          generateMilestones: true,
+          suggestMilestones: true,
           generateMetrics: true,
+          generateExperiments: true,
           parentGoal: selectedMonthlyGoal ? {
             title: selectedMonthlyGoal.title,
             description: selectedMonthlyGoal.description,
@@ -337,16 +527,29 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
         }
       )
 
+      // Convert metrics to the correct format with required fields
+      const formattedMetrics = (suggestions.metrics || []).map(metric => ({
+        name: metric.name,
+        target: metric.target || 0, // Ensure target is a number
+        unit: metric.unit || '', // Ensure unit is a string
+        current: 0 // Initialize current value
+      }))
+
       // Update form data with AI suggestions
       setFormData(prev => ({
         ...prev,
         title: suggestions.enhancedTitle || prev.title,
-        description: suggestions.enhancedDescription || prev.description
+        description: suggestions.enhancedDescription || prev.description,
+        hypothesis: suggestions.hypothesis || prev.hypothesis || '',
+        expectedOutcome: suggestions.expectedOutcome || prev.expectedOutcome || '',
+        experimentSteps: suggestions.experimentSteps || prev.experimentSteps || [],
+        metrics: formattedMetrics,
+        suggestedExperiments: suggestions.suggestedExperiments || []
       }))
 
       toast({
         title: "Goal enhanced",
-        description: "AI has helped improve your goal description."
+        description: "AI has helped improve your goal and suggested experiments."
       })
     } catch (error) {
       console.error('Error enhancing goal:', error)
@@ -448,7 +651,7 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
       {/* Context Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label className="text-lg font-semibold">Weekly Task</Label>
+          <Label className="text-lg font-semibold">Sprint Task</Label>
           <div className="flex items-center space-x-2">
             <TooltipProvider>
               <Tooltip>
@@ -456,7 +659,7 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
                   <InfoIcon className="h-4 w-4 text-gray-400" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="max-w-xs">Weekly tasks should be specific, actionable items that can be completed within the week.</p>
+                  <p className="max-w-xs">Sprint tasks are experiments that can be completed within 1-2 weeks. Define your hypothesis, expected outcomes, and metrics for tracking progress.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -553,24 +756,144 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
           )}
         </div>
 
+        <div className="mb-6">
+          <Label>Quick Templates</Label>
+          <div className="grid grid-cols-3 gap-3 mt-2">
+            {Object.entries(DOMAIN_TEMPLATES).map(([domain, { templates }]) => (
+              <Button
+                key={domain}
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  const template = templates[Math.floor(Math.random() * templates.length)];
+                  setFormData(prev => ({
+                    ...prev,
+                    title: template.title,
+                    hypothesis: template.hypothesis,
+                    expectedOutcome: template.expectedOutcome,
+                    metrics: template.metrics.map(m => ({
+                      ...m,
+                      current: 0
+                    }))
+                  }));
+                  toast({
+                    title: "Template Applied",
+                    description: `Applied ${domain} template: ${template.title}`
+                  });
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="capitalize font-medium">{domain}</span>
+                  <span className="text-xs text-muted-foreground">{templates.length} templates</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4 border rounded-lg p-4 bg-muted/10">
+          <h3 className="font-medium">Experiment Details</h3>
+          
+          <div>
+            <Label>Hypothesis</Label>
+            <Textarea
+              value={formData.hypothesis}
+              onChange={(e) => handleInputChange('hypothesis', e.target.value)}
+              placeholder="What do you believe will happen? (e.g., By implementing feature X, we will increase user engagement by Y%)"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>Expected Outcome</Label>
+            <Textarea
+              value={formData.expectedOutcome}
+              onChange={(e) => handleInputChange('expectedOutcome', e.target.value)}
+              placeholder="What results will validate your hypothesis?"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>Metrics</Label>
+            <div className="space-y-2">
+              {formData.metrics?.map((metric, index) => (
+                <div key={index} className="flex gap-2 items-start">
+                  <Input
+                    value={metric.name}
+                    onChange={(e) => {
+                      const newMetrics = [...(formData.metrics || [])]
+                      newMetrics[index] = { ...metric, name: e.target.value }
+                      handleInputChange('metrics', newMetrics)
+                    }}
+                    placeholder="Metric name"
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={metric.target}
+                    onChange={(e) => {
+                      const newMetrics = [...(formData.metrics || [])]
+                      newMetrics[index] = { ...metric, target: Number(e.target.value) }
+                      handleInputChange('metrics', newMetrics)
+                    }}
+                    placeholder="Target"
+                    className="w-24"
+                  />
+                  <Input
+                    value={metric.unit}
+                    onChange={(e) => {
+                      const newMetrics = [...(formData.metrics || [])]
+                      newMetrics[index] = { ...metric, unit: e.target.value }
+                      handleInputChange('metrics', newMetrics)
+                    }}
+                    placeholder="Unit"
+                    className="w-24"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const newMetrics = formData.metrics?.filter((_, i) => i !== index)
+                      handleInputChange('metrics', newMetrics)
+                    }}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newMetrics = [...(formData.metrics || []), { name: '', target: 0, unit: '' }]
+                  handleInputChange('metrics', newMetrics)
+                }}
+              >
+                Add Metric
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div>
-          <Label>Task</Label>
+          <Label>Task Description</Label>
           <div className="flex gap-2">
             <Input
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
-              placeholder="e.g., Complete user research interviews for new feature"
+              placeholder="What needs to be done to test the hypothesis?"
               className="mt-1"
             />
           </div>
         </div>
 
         <div>
-          <Label>Notes</Label>
+          <Label>Implementation Notes</Label>
           <Textarea
             value={formData.description}
             onChange={(e) => handleInputChange('description', e.target.value)}
-            placeholder="Add any relevant notes, success criteria, or additional context"
+            placeholder="Add technical details, implementation steps, or additional context"
             className="mt-1 min-h-[100px]"
           />
         </div>
@@ -654,6 +977,68 @@ export function WeeklyGoalForm({ mode, initialData, onComplete }: WeeklyGoalForm
           </Select>
         </div>
       </div>
+
+      {/* AI Experiment Suggestions */}
+      {formData.suggestedExperiments && formData.suggestedExperiments.length > 0 && (
+        <div className="space-y-4 border rounded-lg p-4 bg-blue-50/50">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-500" />
+              Suggested Experiments
+            </h3>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <InfoIcon className="h-4 w-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">AI-generated experiment suggestions based on your goal. Click to apply them to your task.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="grid gap-3">
+            {formData.suggestedExperiments.map((experiment, index) => (
+              <Card key={index} className="p-3 hover:bg-blue-50 cursor-pointer transition-colors"
+                onClick={() => {
+                  // Convert experiment metrics to the correct format with required fields
+                  const formattedMetrics = experiment.metrics.map(metric => ({
+                    name: metric.name,
+                    target: metric.target || 0, // Ensure target is a number
+                    unit: metric.unit || '', // Ensure unit is a string
+                    current: 0 // Initialize current value
+                  }))
+
+                  setFormData(prev => ({
+                    ...prev,
+                    title: experiment.title,
+                    description: experiment.description,
+                    hypothesis: experiment.hypothesis,
+                    experimentSteps: experiment.steps,
+                    metrics: formattedMetrics
+                  }))
+                  toast({
+                    title: "Experiment applied",
+                    description: "The selected experiment has been applied to your task."
+                  })
+                }}>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">{experiment.title}</h4>
+                  <p className="text-sm text-muted-foreground">{experiment.description}</p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {experiment.metrics.length} metrics
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {experiment.steps.length} steps
+                    </Badge>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end space-x-4">
         {mode === 'edit' && (

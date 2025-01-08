@@ -6,10 +6,17 @@ interface ParentGoalInfo {
 }
 
 interface EnhanceGoalOptions {
-  generateMilestones?: boolean;
-  generateMetrics?: boolean;
   parentGoal?: ParentGoalInfo;
   timeframe?: string;
+  quarterInfo?: {
+    quarter: number;
+    year: number;
+    months: string[];
+  };
+  generateKeyResults?: boolean;
+  generateMetrics?: boolean;
+  generateExperiments?: boolean;
+  suggestMilestones?: boolean;
   monthOfQuarter?: number;
   monthlyTarget?: number;
   monthPosition?: 'initial' | 'intermediate' | 'final';
@@ -32,15 +39,29 @@ interface EnhanceGoalOptions {
 interface GoalSuggestion {
   enhancedTitle: string;
   enhancedDescription: string;
+  hypothesis?: string;
+  expectedOutcome?: string;
+  experimentSteps?: string[];
+  metrics?: Array<{
+    name: string;
+    target?: number;
+    unit?: string;
+  }>;
   milestones?: Array<{
     title: string;
     description: string;
     dueDate?: string;
   }>;
-  metrics?: Array<{
-    name: string;
-    target?: number;
-    unit?: string;
+  suggestedExperiments?: Array<{
+    title: string;
+    description: string;
+    hypothesis: string;
+    steps: string[];
+    metrics: Array<{
+      name: string;
+      target: number;
+      unit: string;
+    }>;
   }>;
 }
 
@@ -73,8 +94,9 @@ export async function enhanceGoal(
         description,
         timeframe,
         parentGoal: options?.parentGoal,
-        generateMilestones: options?.generateMilestones,
+        suggestMilestones: options?.suggestMilestones,
         generateMetrics: options?.generateMetrics,
+        generateExperiments: options?.generateExperiments,
         monthOfQuarter: options?.monthOfQuarter,
         monthlyTarget: options?.monthlyTarget,
         monthPosition: options?.monthPosition

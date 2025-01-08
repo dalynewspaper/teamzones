@@ -71,6 +71,9 @@ export interface Goal {
     blockers?: string[]
     nextSteps?: string[]
   }
+  hypothesis?: string
+  expectedOutcome?: string
+  experimentSteps?: string[]
   createdAt: Date
   updatedAt: Date
   createdBy: string
@@ -115,9 +118,20 @@ export interface MetricSuggestion {
   unit: string
 }
 
+export interface ExperimentSuggestion {
+  title: string
+  description: string
+  hypothesis: string
+  steps: string[]
+  metrics: MetricSuggestion[]
+}
+
 export interface GoalSuggestion {
   enhancedTitle: string
   enhancedDescription: string
+  hypothesis?: string
+  expectedOutcome?: string
+  experimentSteps?: string[]
   metrics?: MetricSuggestion[]
   keyResults?: {
     description: string
@@ -125,6 +139,7 @@ export interface GoalSuggestion {
     metrics: MetricSuggestion[]
   }[]
   milestones?: MilestoneSuggestion[]
+  suggestedExperiments?: ExperimentSuggestion[]
 }
 
 export interface QuarterInfo {
@@ -143,5 +158,6 @@ export interface GoalEnhancementOptions {
   }
   generateKeyResults?: boolean
   generateMetrics?: boolean
+  generateExperiments?: boolean
   suggestMilestones?: boolean
 } 

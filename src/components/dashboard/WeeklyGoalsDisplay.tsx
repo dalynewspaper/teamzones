@@ -9,9 +9,10 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Circle, Clock, AlertTriangle, Plus } from 'lucide-react'
+import { CheckCircle2, Circle, Clock, AlertTriangle, Plus, ListTodo } from 'lucide-react'
 import Link from 'next/link'
 import { getISOWeek } from 'date-fns'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 
 const statusIcons = {
   not_started: <Circle className="h-4 w-4" />,
@@ -25,6 +26,20 @@ const statusColors = {
   in_progress: 'bg-blue-100 text-blue-800',
   at_risk: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-green-100 text-green-800'
+}
+
+const getStatusVariant = (status: GoalStatus) => {
+  switch (status) {
+    case 'completed':
+      return 'success'
+    case 'in_progress':
+      return 'default'
+    case 'at_risk':
+      return 'destructive'
+    case 'not_started':
+    default:
+      return 'secondary'
+  }
 }
 
 export function WeeklyGoalsDisplay() {
@@ -108,64 +123,90 @@ export function WeeklyGoalsDisplay() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Tasks</h2>
+        <div>
+          <h2 className="text-lg font-semibold">Sprint Tasks</h2>
+          <p className="text-sm text-muted-foreground">Track experiments and validate hypotheses</p>
+        </div>
         <Link href={`/dashboard/goals/weekly/create?week=${currentWeek.id}`}>
           <Button variant="outline" size="sm">
             <Plus className="h-4 w-4 mr-2" />
-            Add Task
+            New Sprint Task
           </Button>
         </Link>
       </div>
 
       {goals.length === 0 ? (
-        <Card className="p-6 text-center">
-          <p className="text-muted-foreground">No tasks set for this week.</p>
-          <Link href={`/dashboard/goals/weekly/create?week=${currentWeek.id}`}>
-            <Button variant="outline" className="mt-4">
-              <Plus className="h-4 w-4 mr-2" />
-              Set Tasks
-            </Button>
-          </Link>
+        <Card className="p-6">
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <ListTodo className="h-12 w-12 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-muted-foreground">No sprint tasks for this week.</p>
+              <p className="text-sm text-muted-foreground mt-1">Create a new task to start experimenting and tracking progress.</p>
+            </div>
+            <Link href={`/dashboard/goals/weekly/create?week=${currentWeek.id}`}>
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Sprint Task
+              </Button>
+            </Link>
+          </div>
         </Card>
       ) : (
         <div className="grid gap-4">
           {goals.map((goal) => (
-            <Link key={goal.id} href={`/dashboard/goals/weekly/${goal.id}`}>
-              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium">{goal.title}</h3>
-                        <Badge variant="secondary" className="capitalize">{goal.type}</Badge>
-                        <Badge variant="outline" className="capitalize">{goal.priority} Priority</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{goal.description}</p>
-                    </div>
-                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[goal.status]}`}>
-                      {statusIcons[goal.status]}
-                      <span className="ml-1 capitalize">{goal.status.replace('_', ' ')}</span>
-                    </div>
+            <Card key={goal.id} className="p-4">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-medium">{goal.title}</h3>
+                    {goal.hypothesis && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        <span className="font-medium">Hypothesis:</span> {goal.hypothesis}
+                      </p>
+                    )}
                   </div>
-
-                  {/* Progress bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">{goal.progress}%</span>
-                    </div>
-                    <Progress value={goal.progress} className="h-2" />
-                  </div>
-
-                  {/* Milestones summary */}
-                  {goal.milestones && goal.milestones.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{goal.milestones.filter(m => m.status === 'completed').length}/{goal.milestones.length} tasks completed</span>
-                    </div>
-                  )}
+                  <Badge variant={getStatusVariant(goal.status)}>{goal.status}</Badge>
                 </div>
-              </Card>
-            </Link>
+
+                {goal.metrics && goal.metrics.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Metrics</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {goal.metrics.map((metric, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                          <span className="text-sm">{metric.name}</span>
+                          <span className="text-sm font-medium">
+                            {metric.current || 0}/{metric.target} {metric.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex -space-x-2">
+                      {goal.assignees.map((assignee) => (
+                        <Avatar key={assignee.userId} className="border-2 border-background w-6 h-6">
+                          <AvatarImage src={assignee.photoURL} />
+                          <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Progress value={goal.progress} className="w-24" />
+                      <span className="text-sm text-muted-foreground">{goal.progress}%</span>
+                    </div>
+                  </div>
+                  <Link href={`/dashboard/goals/weekly/${goal.id}`}>
+                    <Button variant="ghost" size="sm">View Details</Button>
+                  </Link>
+                </div>
+              </div>
+            </Card>
           ))}
         </div>
       )}

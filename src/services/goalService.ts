@@ -1,6 +1,7 @@
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, orderBy, onSnapshot, QueryConstraint } from 'firebase/firestore';
 import { Goal, GoalTimeframe, GoalType, AllGoalTimeframes } from '@/types/goals';
+import { eventBus } from '@/lib/eventBus';
 
 export async function createGoal(goal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const goalsCollection = collection(db, 'goals');
@@ -12,20 +13,53 @@ export async function createGoal(goal: Omit<Goal, 'id' | 'createdAt' | 'updatedA
     updatedAt: now
   });
   
+  // Get the created goal data to emit with the event
+  const goalSnap = await getDoc(docRef);
+  const goalData = goalSnap.data();
+  const createdGoal = {
+    id: docRef.id,
+    ...goalData,
+    startDate: goalData?.startDate?.toDate() || new Date(),
+    endDate: goalData?.endDate?.toDate() || new Date(),
+    createdAt: goalData?.createdAt?.toDate() || new Date(),
+    updatedAt: goalData?.updatedAt?.toDate() || new Date(),
+  } as Goal;
+  
+  // Emit the goalCreated event
+  eventBus.emit('goalCreated', createdGoal);
+  
   return docRef.id;
 }
 
 export async function updateGoal(goalId: string, goalData: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
-  const goalRef = doc(db, 'goals', goalId)
+  const goalRef = doc(db, 'goals', goalId);
   await updateDoc(goalRef, {
     ...goalData,
     updatedAt: new Date()
-  })
+  });
+
+  // Get the updated goal data to emit with the event
+  const goalSnap = await getDoc(goalRef);
+  const updatedGoalData = goalSnap.data();
+  const updatedGoal = {
+    id: goalId,
+    ...updatedGoalData,
+    startDate: updatedGoalData?.startDate?.toDate() || new Date(),
+    endDate: updatedGoalData?.endDate?.toDate() || new Date(),
+    createdAt: updatedGoalData?.createdAt?.toDate() || new Date(),
+    updatedAt: updatedGoalData?.updatedAt?.toDate() || new Date(),
+  } as Goal;
+
+  // Emit the goalUpdated event
+  eventBus.emit('goalUpdated', updatedGoal);
 }
 
 export async function deleteGoal(goalId: string): Promise<void> {
   const goalRef = doc(db, 'goals', goalId);
   await deleteDoc(goalRef);
+  
+  // Emit the goalDeleted event
+  eventBus.emit('goalDeleted', goalId);
 }
 
 export async function getGoal(goalId: string): Promise<Goal | null> {

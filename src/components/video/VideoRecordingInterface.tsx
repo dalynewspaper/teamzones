@@ -4,11 +4,15 @@ import { useHotkeys } from 'react-hotkeys-hook'
 import { useToast } from '@/components/ui/use-toast'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Square, Circle, Settings, Play, Pause, Mic, MicOff, Volume2, VolumeX, Camera, Monitor, Layout } from 'lucide-react'
+import { Square, Circle, Settings, Play, Pause, Mic, MicOff, Volume2, VolumeX, Camera, Monitor, Layout, Wand2, Clock, Hash, RotateCcw, Check, X, Maximize2 } from 'lucide-react'
 import { VideoRecorder } from './VideoRecorder'
 import { RecordingSettings } from './RecordingSettings'
 import { KeyboardShortcutsLegend } from './KeyboardShortcutsLegend'
 import { formatTime } from '@/lib/utils'
+import { Progress } from '@/components/ui/progress'
+import { VideoService, type UploadProgress } from '@/services/videoService'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface VideoDevice {
   deviceId: string
@@ -23,6 +27,15 @@ interface VideoRecordingInterfaceProps {
       size: number;
       type: string;
       timestamp: string;
+      chapters?: Array<{
+        time: number;
+        title: string;
+      }>;
+      transcript?: string;
+      summary?: string;
+      aiEnhanced: boolean;
+      quality: string;
+      layout: string;
     }
   }) => void;
   onCancel: () => void;
@@ -30,6 +43,7 @@ interface VideoRecordingInterfaceProps {
   initialLayout?: 'camera' | 'screen' | 'pip';
   initialQuality?: '720p' | '1080p' | '4k';
   initialAudioSource?: 'mic' | 'system' | 'both';
+  maxDuration?: number; // in seconds
 }
 
 export function VideoRecordingInterface({
@@ -38,7 +52,8 @@ export function VideoRecordingInterface({
   onError,
   initialLayout = 'camera',
   initialQuality = '1080p',
-  initialAudioSource = 'both'
+  initialAudioSource = 'both',
+  maxDuration = 300
 }: VideoRecordingInterfaceProps) {
   const { toast } = useToast()
   const [isRecording, setIsRecording] = useState(false)
@@ -61,6 +76,21 @@ export function VideoRecordingInterface({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout>()
+  const [isAIEnabled, setIsAIEnabled] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState(0)
+  const [countdownSeconds, setCountdownSeconds] = useState(3)
+  const [isCountingDown, setIsCountingDown] = useState(false)
+  const [recordingChunks, setRecordingChunks] = useState<Blob[]>([])
+  const uploadProgressRef = useRef(0)
+  const [isReviewing, setIsReviewing] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
+  const recordingBlobRef = useRef<Blob | null>(null)
+  const recordingMetadataRef = useRef<any>(null)
+  const [recordingMode, setRecordingMode] = useState<'camera' | 'screen'>(initialLayout === 'screen' ? 'screen' : 'camera')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // Load available devices
   useEffect(() => {
@@ -166,7 +196,40 @@ export function VideoRecordingInterface({
     }
   }, [layout, selectedDeviceId])
 
-  // ... existing keyboard shortcuts ...
+  // Countdown timer effect
+  useEffect(() => {
+    if (isCountingDown && countdownSeconds > 0) {
+      const timer = setTimeout(() => {
+        setCountdownSeconds(prev => prev - 1)
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    } else if (isCountingDown && countdownSeconds === 0) {
+      setIsCountingDown(false)
+      setCountdownSeconds(3)
+      startRecording()
+    }
+  }, [isCountingDown, countdownSeconds])
+
+  // Max duration warning
+  useEffect(() => {
+    if (isRecording && !isPaused && elapsedTime >= maxDuration - 30) {
+      toast({
+        title: 'Recording time limit approaching',
+        description: `You have ${maxDuration - elapsedTime} seconds remaining`,
+        duration: 4000
+      })
+    }
+
+    if (isRecording && elapsedTime >= maxDuration) {
+      stopRecording()
+      toast({
+        title: 'Maximum recording duration reached',
+        description: 'Your recording has been automatically stopped',
+        duration: 4000
+      })
+    }
+  }, [isRecording, isPaused, elapsedTime, maxDuration])
 
   const getResolutionConstraints = () => {
     switch (resolution) {
@@ -179,14 +242,68 @@ export function VideoRecordingInterface({
     }
   }
 
+  const processRecording = async (blob: Blob): Promise<{
+    blob: Blob,
+    metadata: any
+  }> => {
+    setIsProcessing(true)
+    setProcessingProgress(0)
+
+    try {
+      // Simulate AI processing with progress updates
+      for (let i = 0; i < 100; i += 10) {
+        await new Promise(resolve => setTimeout(resolve, 200))
+        setProcessingProgress(i)
+      }
+
+      // TODO: Implement actual AI processing here
+      // - Speech-to-text transcription
+      // - Chapter detection
+      // - Summary generation
+      // - Smart compression
+
+      const metadata = {
+        duration: formatTime(elapsedTime),
+        size: blob.size,
+        type: blob.type,
+        timestamp: new Date().toISOString(),
+        aiEnhanced: isAIEnabled,
+        quality: resolution,
+        layout: layout,
+        // Placeholder AI features (to be implemented)
+        chapters: [
+          { time: 0, title: 'Introduction' },
+          { time: Math.floor(elapsedTime / 2), title: 'Main Points' },
+          { time: elapsedTime - 30, title: 'Conclusion' }
+        ],
+        transcript: 'Transcript will be generated here...',
+        summary: 'AI-generated summary will appear here...'
+      }
+
+      setProcessingProgress(100)
+      return { blob, metadata }
+    } catch (error) {
+      console.error('Processing error:', error)
+      throw new Error('Failed to process recording')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const startRecordingWithCountdown = () => {
+    setIsCountingDown(true)
+  }
+
+  // Modify startRecording function
   const startRecording = async () => {
     try {
       // Stop any existing streams first
       stopStream()
       
-      // Get camera stream if needed
-      let videoStream: MediaStream | null = null
-      if (layout !== 'screen') {
+      let finalStream: MediaStream | null = null;
+
+      if (recordingMode === 'camera') {
+        // Get camera stream
         const constraints: MediaStreamConstraints = {
           video: {
             ...getResolutionConstraints(),
@@ -197,69 +314,63 @@ export function VideoRecordingInterface({
         }
 
         try {
-          videoStream = await navigator.mediaDevices.getUserMedia(constraints)
+          finalStream = await navigator.mediaDevices.getUserMedia(constraints)
         } catch (err) {
           console.error('Camera access error:', err)
           setError('Failed to access camera. Please check permissions.')
           onError?.('Camera access failed')
           return
         }
-      }
-
-      // Get screen stream if needed
-      let screenStream: MediaStream | null = null
-      if (layout !== 'camera') {
+      } else {
+        // Get screen stream
         try {
           // @ts-ignore - TypeScript doesn't know about getDisplayMedia options
-          screenStream = await navigator.mediaDevices.getDisplayMedia({
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
               ...getResolutionConstraints(),
               frameRate: resolution === '4k' ? 30 : 60
             },
             audio: isSystemAudioEnabled
-          })
+          });
 
-          // Handle user cancelling screen share
-          screenStream.getVideoTracks()[0].onended = () => {
-            if (isRecording) {
-              stopRecording()
-              setError('Screen sharing was stopped')
-              onError?.('Screen sharing stopped')
+          // If mic is enabled, get mic stream and combine with screen stream
+          if (isMicEnabled) {
+            const micStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false
+            });
+            
+            // Combine screen and mic streams
+            const tracks = [
+              ...screenStream.getVideoTracks(),
+              ...micStream.getAudioTracks()
+            ];
+            
+            if (isSystemAudioEnabled) {
+              tracks.push(...screenStream.getAudioTracks());
             }
+            
+            finalStream = new MediaStream(tracks);
+
+            // Handle screen share being stopped by user
+            screenStream.getVideoTracks()[0].onended = () => {
+              stopRecording();
+              setError('Screen sharing was stopped');
+              onError?.('Screen sharing stopped');
+            };
+          } else {
+            finalStream = screenStream;
           }
         } catch (err) {
           console.error('Screen sharing error:', err)
-          if (layout === 'screen') {
-            setError('Failed to start screen sharing')
-            onError?.('Screen sharing failed')
-            if (videoStream) {
-              videoStream.getTracks().forEach(track => track.stop())
-            }
-            return
-          }
-          // Fall back to camera only if PiP fails
-          if (layout === 'pip') {
-            setLayout('camera')
-          }
+          setError('Failed to start screen sharing')
+          onError?.('Screen sharing failed')
+          return
         }
       }
 
-      // Combine streams based on layout
-      let finalStream: MediaStream
-      if (layout === 'pip' && videoStream && screenStream) {
-        const tracks = [
-          ...screenStream.getVideoTracks(),
-          ...videoStream.getVideoTracks(),
-          ...(isMicEnabled ? videoStream.getAudioTracks() : []),
-          ...(isSystemAudioEnabled ? screenStream.getAudioTracks() : [])
-        ]
-        finalStream = new MediaStream(tracks)
-      } else if (layout === 'screen' && screenStream) {
-        finalStream = screenStream
-      } else if (videoStream) {
-        finalStream = videoStream
-      } else {
-        throw new Error('No valid stream available')
+      if (!finalStream) {
+        throw new Error('No stream available')
       }
 
       setStream(finalStream)
@@ -267,7 +378,7 @@ export function VideoRecordingInterface({
       // Set up MediaRecorder with optimal settings
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
         ? 'video/webm;codecs=vp9,opus'
-        : 'video/webm';
+        : 'video/webm'
 
       const options = {
         mimeType,
@@ -275,66 +386,21 @@ export function VideoRecordingInterface({
         audioBitsPerSecond: 128000
       }
 
-      const mediaRecorder = new MediaRecorder(finalStream, options)
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
+      mediaRecorderRef.current = new MediaRecorder(finalStream, options)
 
-      // Handle data available in larger chunks for better quality
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data)
-        }
-      }
-
-      // Clean up properly when recording stops
-      mediaRecorder.onstop = async () => {
-        try {
-          const blob = new Blob(chunksRef.current, { type: mimeType })
-          // Create a video element to get duration
-          const video = document.createElement('video')
-          video.src = URL.createObjectURL(blob)
+          setRecordingChunks([...chunksRef.current])
           
-          await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-              const duration = Math.round(video.duration)
-              const minutes = Math.floor(duration / 60)
-              const seconds = duration % 60
-              const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`
-              
-              onRecordingComplete({
-                blob,
-                metadata: {
-                  duration: formattedDuration,
-                  size: blob.size,
-                  type: blob.type,
-                  timestamp: new Date().toISOString()
-                }
-              })
-              resolve(null)
-            }
-          })
-        } catch (err) {
-          console.error('Error creating recording blob:', err)
-          onError?.('Failed to save recording')
-        } finally {
-          stopStream()
-          setIsRecording(false)
-          setIsPaused(false)
-          setElapsedTime(0)
+          // Progress upload simulation
+          uploadProgressRef.current += (100 / (maxDuration / 5)) // Update every 5 seconds
         }
       }
 
-      // Handle recording errors
-      mediaRecorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event)
-        setError('Recording error occurred')
-        onError?.('Recording error')
-        stopRecording()
-      }
-
-      mediaRecorder.start(1000) // Capture data every second for smoother recording
+      mediaRecorderRef.current.start(5000) // Capture in 5-second chunks
       setIsRecording(true)
-      setError(null)
+      setElapsedTime(0)
 
     } catch (err) {
       console.error('Error starting recording:', err)
@@ -344,14 +410,31 @@ export function VideoRecordingInterface({
     }
   }
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      setIsPaused(false)
-      setElapsedTime(0)
-      stopStream()
+  // Modify existing stopRecording function
+  const stopRecording = async () => {
+    if (!mediaRecorderRef.current || !isRecording) return
+
+    mediaRecorderRef.current.stop()
+    setIsRecording(false)
+    setIsPaused(false)
+
+    const finalBlob = new Blob(chunksRef.current, { type: 'video/webm' })
+    try {
+      const processed = await processRecording(finalBlob)
+      // Instead of completing immediately, store the blob and metadata for review
+      recordingBlobRef.current = processed.blob
+      recordingMetadataRef.current = processed.metadata
+      const url = URL.createObjectURL(processed.blob)
+      setPreviewUrl(url)
+      setIsReviewing(true)
+    } catch (error) {
+      console.error('Processing error:', error)
+      onError?.('Failed to process recording')
     }
+
+    chunksRef.current = []
+    setRecordingChunks([])
+    uploadProgressRef.current = 0
   }
 
   const togglePause = () => {
@@ -378,9 +461,67 @@ export function VideoRecordingInterface({
     }
   }
 
+  const handleAcceptRecording = async () => {
+    if (recordingBlobRef.current && recordingMetadataRef.current) {
+      try {
+        setIsProcessing(true)
+        setProcessingProgress(0)
+
+        const upload = await VideoService.uploadVideo(
+          recordingBlobRef.current,
+          recordingMetadataRef.current,
+          (progress: UploadProgress) => {
+            setProcessingProgress(progress.progress)
+          }
+        )
+
+        onRecordingComplete({
+          blob: recordingBlobRef.current,
+          metadata: {
+            ...recordingMetadataRef.current,
+            url: upload.url,
+            id: upload.id
+          }
+        })
+      } catch (error) {
+        console.error('Upload error:', error)
+        onError?.('Failed to upload recording')
+        toast({
+          title: 'Upload Failed',
+          description: 'There was an error uploading your recording. Please try again.',
+          variant: 'destructive'
+        })
+      } finally {
+        setIsProcessing(false)
+        cleanupPreview()
+      }
+    }
+  }
+
+  const handleRetakeRecording = () => {
+    cleanupPreview()
+    startRecordingWithCountdown()
+  }
+
+  const handleCancelReview = () => {
+    cleanupPreview()
+    onCancel()
+  }
+
+  const cleanupPreview = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
+    setPreviewUrl(null)
+    setIsReviewing(false)
+    recordingBlobRef.current = null
+    recordingMetadataRef.current = null
+  }
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      cleanupPreview()
       stopStream()
       if (timerRef.current) {
         clearInterval(timerRef.current)
@@ -391,186 +532,440 @@ export function VideoRecordingInterface({
     }
   }, [])
 
-  return (
-    <div className="fixed inset-0 bg-[#141414] flex flex-col">
-      {error && (
-        <Alert variant="destructive" className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="font-semibold">Error</div>
-          <div>{error}</div>
-        </Alert>
-      )}
+  // Handle fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement !== null)
+    }
 
-      {/* Main Content Area */}
-      <div className="flex-1 relative">
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return
+
+    try {
+      if (!isFullscreen) {
+        await containerRef.current.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
+    }
+  }
+
+  // Add keyboard shortcuts
+  useHotkeys('space', (event) => {
+    event.preventDefault()
+    if (isRecording) {
+      togglePause()
+    } else {
+      startRecordingWithCountdown()
+    }
+  }, [isRecording, togglePause, startRecordingWithCountdown])
+
+  useHotkeys('esc', () => {
+    if (isRecording) {
+      stopRecording()
+    }
+  }, [isRecording, stopRecording])
+
+  useHotkeys('m', () => {
+    setIsMicEnabled(prev => !prev)
+  }, [])
+
+  useHotkeys('b', () => {
+    if (recordingMode === 'camera') {
+      setBackgroundBlur(prev => !prev)
+    }
+  }, [recordingMode])
+
+  useHotkeys('f', toggleFullscreen, [toggleFullscreen])
+
+  // Modify recording mode switch to properly handle stream changes
+  const handleRecordingModeChange = async () => {
+    const newMode = recordingMode === 'camera' ? 'screen' : 'camera'
+    
+    // Stop current stream
+    stopStream()
+
+    try {
+      if (newMode === 'camera') {
+        const constraints: MediaStreamConstraints = {
+          video: {
+            ...getResolutionConstraints(),
+            deviceId: selectedDeviceId,
+            facingMode: 'user'
+          },
+          audio: isMicEnabled
+        }
+        const videoStream = await navigator.mediaDevices.getUserMedia(constraints)
+        setStream(videoStream)
+      } else {
+        // @ts-ignore - TypeScript doesn't know about getDisplayMedia options
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            ...getResolutionConstraints(),
+            frameRate: resolution === '4k' ? 30 : 60
+          },
+          audio: isSystemAudioEnabled
+        })
+        setStream(screenStream)
+
+        // Handle user cancelling screen share
+        screenStream.getVideoTracks()[0].onended = () => {
+          handleRecordingModeChange() // Switch back to camera
+        }
+      }
+      setRecordingMode(newMode)
+    } catch (error) {
+      console.error('Error switching recording mode:', error)
+      // If screen sharing fails, stay in camera mode
+      if (newMode === 'screen') {
+        const cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            ...getResolutionConstraints(),
+            deviceId: selectedDeviceId,
+            facingMode: 'user'
+          },
+          audio: isMicEnabled
+        })
+        setStream(cameraStream)
+        toast({
+          title: "Screen sharing failed",
+          description: "Falling back to camera mode",
+          variant: "destructive"
+        })
+      }
+    }
+  }
+
+  if (isReviewing && previewUrl) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="relative flex-1 bg-black rounded-lg overflow-hidden">
+          <video
+            ref={previewVideoRef}
+            src={previewUrl}
+            className="w-full h-full"
+            controls
+            autoPlay
+          />
+          
+          {/* Add upload progress overlay */}
+          {isProcessing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
+              <div className="text-white mb-4">Uploading your recording...</div>
+              <Progress value={processingProgress} className="w-64 h-2" />
+              <div className="text-white/70 text-sm mt-2">
+                {Math.round(processingProgress)}%
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center justify-between mt-4 space-x-4">
+          <div className="text-sm text-muted-foreground">
+            Review your recording before finalizing
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={handleRetakeRecording}
+              className="space-x-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Retake</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              onClick={handleCancelReview}
+              className="space-x-2"
+            >
+              <X className="w-4 h-4" />
+              <span>Cancel</span>
+            </Button>
+            
+            <Button
+              variant="default"
+              onClick={handleAcceptRecording}
+              className="space-x-2 bg-green-500 hover:bg-green-600"
+            >
+              <Check className="w-4 h-4" />
+              <span>Accept & Continue</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className="flex flex-col h-full">
+      {/* Main Preview Area */}
+      <div className="relative flex-1 min-h-0 bg-black rounded-xl overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-full max-w-[1200px] aspect-video">
+          {error && (
+            <Alert variant="destructive" className="absolute top-4 left-4 right-4 z-50">
+              {error}
+            </Alert>
+          )}
+
+          {isCountingDown && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+              <div className="text-7xl font-bold text-white animate-pulse">
+                {countdownSeconds}
+              </div>
+            </div>
+          )}
+
+          <div className="relative w-full h-full">
             <VideoRecorder
               stream={stream}
               isRecording={isRecording}
-              backgroundBlur={backgroundBlur}
+              backgroundBlur={backgroundBlur && recordingMode === 'camera'}
             />
           </div>
         </div>
+
+        {/* Recording Progress Overlay */}
+        {isRecording && (
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="flex items-center justify-between text-white mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-lg font-medium">{formatTime(elapsedTime)}</span>
+                <span className="text-sm opacity-80">
+                  ({formatTime(maxDuration - elapsedTime)} remaining)
+                </span>
+              </div>
+            </div>
+            <Progress value={(elapsedTime / maxDuration) * 100} className="h-1" />
+          </div>
+        )}
+
+        {/* Processing Overlay */}
+        {isProcessing && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
+            <div className="text-xl font-medium text-white mb-4">
+              Enhancing your recording...
+            </div>
+            <div className="w-64">
+              <Progress value={processingProgress} className="h-2" />
+              <div className="text-sm text-white/70 text-center mt-2">
+                {Math.round(processingProgress)}%
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom Control Bar */}
-      <div className="relative w-full bg-transparent">
-        <div className="max-w-[1200px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between bg-black/90 backdrop-blur-md rounded-xl px-4 py-2.5 border border-white/[0.08]">
-            {/* Left Controls */}
-            <div className="flex items-center space-x-3">
-              <Button
-                variant={isRecording ? 'destructive' : 'default'}
-                size="sm"
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`rounded-md transition-all duration-200 flex items-center space-x-2 h-8 px-3 ${
-                  isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="w-3.5 h-3.5" />
-                    <span className="text-sm font-medium">Stop</span>
-                  </>
-                ) : (
-                  <>
-                    <Circle className="w-3.5 h-3.5 fill-current" />
-                    <span className="text-sm font-medium">Record</span>
-                  </>
-                )}
-              </Button>
-
-              {isRecording && (
+      {/* Bottom Toolbar */}
+      <div className="flex-none mt-6 bg-gray-50 rounded-lg p-4">
+        <div className="flex flex-col space-y-4">
+          {/* Recording Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              {!isRecording ? (
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={togglePause}
-                  className="rounded-md text-white hover:bg-white/10 h-8 w-8 p-0"
+                  size="lg"
+                  onClick={startRecordingWithCountdown}
+                  className="bg-red-500 hover:bg-red-600 text-white gap-2"
                 >
-                  {isPaused ? (
-                    <Play className="w-3.5 h-3.5" />
-                  ) : (
-                    <Pause className="w-3.5 h-3.5" />
-                  )}
+                  <Circle className="w-4 h-4" />
+                  Start Recording
                 </Button>
+              ) : (
+                <>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={togglePause}
+                    className="gap-2"
+                  >
+                    {isPaused ? (
+                      <>
+                        <Play className="w-4 h-4" />
+                        Resume
+                      </>
+                    ) : (
+                      <>
+                        <Pause className="w-4 h-4" />
+                        Pause
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={stopRecording}
+                    className="gap-2"
+                  >
+                    <Square className="w-4 h-4" />
+                    Stop Recording
+                  </Button>
+                </>
               )}
             </div>
 
-            {/* Center Controls */}
-            <div className="flex items-center space-x-6">
-              {/* Audio Controls */}
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsMicEnabled(!isMicEnabled)}
-                    className={`hover:bg-white/10 rounded-md h-8 w-8 ${isMicEnabled ? 'text-white' : 'text-white/40'}`}
-                  >
-                    {isMicEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-                  </Button>
-                  {isMicEnabled && (
-                    <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-white transition-all duration-100"
-                        style={{ width: `${(audioLevel / 255) * 100}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsSystemAudioEnabled(!isSystemAudioEnabled)}
-                  className={`hover:bg-white/10 rounded-md h-8 w-8 ${isSystemAudioEnabled ? 'text-white' : 'text-white/40'}`}
-                >
-                  {isSystemAudioEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                </Button>
-              </div>
-
-              {/* Recording Time & Quality */}
-              <div className="flex items-center space-x-3">
-                {isRecording && (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-white text-sm font-medium tabular-nums">
-                      {formatTime(elapsedTime)}
-                    </span>
-                  </div>
-                )}
-                <div className="text-white/60 text-xs font-medium px-1.5 py-0.5 rounded bg-white/10">
-                  {resolution}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Controls */}
             <div className="flex items-center space-x-2">
-              <div className="flex items-center p-1 bg-white/[0.07] rounded-md">
-                <Button
-                  variant={layout === 'camera' ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => setLayout('camera')}
-                  className={`h-6 w-6 rounded-sm ${
-                    layout === 'camera' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-                  }`}
-                  title="Camera Only"
-                >
-                  <Camera className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant={layout === 'screen' ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => setLayout('screen')}
-                  className={`h-6 w-6 rounded-sm ${
-                    layout === 'screen' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-                  }`}
-                  title="Screen Share"
-                >
-                  <Monitor className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant={layout === 'pip' ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => setLayout('pip')}
-                  className={`h-6 w-6 rounded-sm ${
-                    layout === 'pip' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-                  }`}
-                  title="Picture in Picture"
-                >
-                  <Layout className="h-3 w-3" />
-                </Button>
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleRecordingModeChange}
+                      className="h-10 w-10"
+                    >
+                      {recordingMode === 'camera' ? (
+                        <Camera className="w-5 h-5" />
+                      ) : (
+                        <Monitor className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Switch to {recordingMode === 'camera' ? 'screen' : 'camera'} recording (Alt+S)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSettingsOpen(true)}
-                className="text-white hover:bg-white/10 h-8 w-8 rounded-md"
-                title="Recording Settings"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsMicEnabled(!isMicEnabled)}
+                      className={`h-10 w-10 ${!isMicEnabled ? 'text-red-500' : ''}`}
+                    >
+                      {isMicEnabled ? (
+                        <Mic className="w-5 h-5" />
+                      ) : (
+                        <MicOff className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isMicEnabled ? 'Disable' : 'Enable'} microphone (M)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-              <KeyboardShortcutsLegend />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsSystemAudioEnabled(!isSystemAudioEnabled)}
+                      className={`h-10 w-10 ${!isSystemAudioEnabled ? 'text-red-500' : ''}`}
+                      disabled={recordingMode === 'camera'}
+                    >
+                      {isSystemAudioEnabled ? (
+                        <Volume2 className="w-5 h-5" />
+                      ) : (
+                        <VolumeX className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isSystemAudioEnabled ? 'Disable' : 'Enable'} system audio
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {recordingMode === 'camera' && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setBackgroundBlur(!backgroundBlur)}
+                        className={`h-10 w-10 ${backgroundBlur ? 'text-purple-500' : ''}`}
+                      >
+                        <Wand2 className="w-5 h-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {backgroundBlur ? 'Disable' : 'Enable'} background blur (B)
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              <div className="h-6 w-px bg-gray-200" />
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="h-10 w-10"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Recording settings (S)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={toggleFullscreen}
+                    >
+                      <Maximize2 className="w-5 h-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Toggle fullscreen (F)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
+          </div>
+
+          {/* Keyboard Shortcuts Legend */}
+          <div className="text-xs text-gray-500 flex items-center justify-center space-x-4">
+            <span>Space: {isRecording ? 'Pause/Resume' : 'Start'}</span>
+            <span>Esc: Stop</span>
+            <span>M: Toggle Mic</span>
+            <span>B: Toggle Blur</span>
+            <span>F: Fullscreen</span>
           </div>
         </div>
       </div>
 
+      {/* Settings Dialog */}
       <RecordingSettings
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        devices={devices}
+        selectedDeviceId={selectedDeviceId}
+        setSelectedDeviceId={setSelectedDeviceId}
         resolution={resolution}
         setResolution={setResolution}
         layout={layout}
         setLayout={setLayout}
         backgroundBlur={backgroundBlur}
         setBackgroundBlur={setBackgroundBlur}
-        devices={devices}
-        selectedDeviceId={selectedDeviceId}
-        setSelectedDeviceId={setSelectedDeviceId}
-        open={isSettingsOpen}
-        onOpenChange={setIsSettingsOpen}
       />
     </div>
   )

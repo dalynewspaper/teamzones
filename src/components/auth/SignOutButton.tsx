@@ -16,13 +16,18 @@ export function SignOutButton({ className }: SignOutButtonProps) {
   const handleSignOut = async () => {
     try {
       setLoading(true);
-      await signOut();
-      // Clear any local storage or session data if needed
+      
+      // Clear any local storage or session data
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
       }
-      router.push('/signin');
+
+      // Sign out and wait for it to complete
+      await signOut();
+      
+      // Only redirect after signout is complete
+      router.replace('/signin');
     } catch (error) {
       console.error('Sign out failed:', error);
     } finally {

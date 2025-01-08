@@ -19,7 +19,7 @@ export function UserInfo() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || loading) return
 
     try {
       setLoading(true)
@@ -34,6 +34,7 @@ export function UserInfo() {
         onboardingCompleted: false
       })
 
+      // Move to next step
       completeStep('user-info')
     } catch (err) {
       console.error('Setup error:', err)
@@ -45,7 +46,7 @@ export function UserInfo() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 relative bg-white">
-      <div className="space-y-4">
+      <div className="p-6 space-y-4">
         <div>
           <h3 className="text-lg font-medium">Your Information</h3>
           <p className="text-sm text-gray-500">
@@ -61,6 +62,7 @@ export function UserInfo() {
               value={userData.name}
               onChange={(e) => setUserData(d => ({ ...d, name: e.target.value }))}
               placeholder="John Doe"
+              disabled={loading}
             />
           </div>
 
@@ -84,25 +86,28 @@ export function UserInfo() {
               value={userData.title}
               onChange={(e) => setUserData(d => ({ ...d, title: e.target.value }))}
               placeholder="Software Engineer"
+              disabled={loading}
             />
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="text-sm text-red-600">
+        <div className="text-sm text-red-600 px-6">
           {error}
         </div>
       )}
 
-      <Button 
-        type="submit" 
-        className="w-full relative z-10" 
-        variant="default"
-        disabled={loading}
-      >
-        {loading ? 'Saving...' : 'Continue'}
-      </Button>
+      <div className="px-6 pb-6">
+        <Button 
+          type="submit" 
+          className="w-full relative z-10" 
+          variant="default"
+          disabled={loading}
+        >
+          {loading ? 'Saving...' : 'Continue'}
+        </Button>
+      </div>
     </form>
   )
 } 

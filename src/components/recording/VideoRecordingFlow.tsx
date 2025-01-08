@@ -23,9 +23,26 @@ export function VideoRecordingFlow({
   const { toast } = useToast()
   const [isOpen, setIsOpen] = useState(true)
 
-  const handleRecordingComplete = async (blob: Blob) => {
+  const handleRecordingComplete = async (recording: { 
+    blob: Blob;
+    metadata: {
+      duration: string;
+      size: number;
+      type: string;
+      timestamp: string;
+      chapters?: Array<{
+        time: number;
+        title: string;
+      }>;
+      transcript?: string;
+      summary?: string;
+      aiEnhanced: boolean;
+      quality: string;
+      layout: string;
+    }
+  }) => {
     try {
-      console.log('Recording completed:', blob)
+      console.log('Recording completed:', recording)
       toast({
         title: 'Recording completed',
         description: 'Your video has been saved successfully.',
@@ -62,13 +79,13 @@ export function VideoRecordingFlow({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[90%] w-[1200px] h-[80vh] p-0">
+      <DialogContent className="max-w-[95vw] w-[1280px] h-[90vh] p-0 overflow-hidden">
         <div className="h-full flex flex-col p-6">
           <DialogHeader className="flex-none space-y-2">
             <DialogTitle>Record Update</DialogTitle>
             <DialogDescription>Share an update with your team</DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden mt-6">
+          <div className="flex-1 min-h-0 mt-6">
             <VideoRecordingInterface
               onRecordingComplete={handleRecordingComplete}
               onCancel={() => handleOpenChange(false)}

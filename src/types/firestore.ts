@@ -61,11 +61,7 @@ export interface Organization {
   domain: string
   employeeCount: string
   ownerId: string
-  members: {
-    userId: string
-    role: 'admin' | 'member'
-    joinedAt: string
-  }[]
+  members: string[]
   settings: {
     allowedDomains: string[]
     weekStartDay: number

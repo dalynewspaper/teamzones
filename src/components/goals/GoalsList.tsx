@@ -52,35 +52,59 @@ export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
   )
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadGoals = async () => {
-      if (!user?.organizationId) return
+      if (!user?.organizationId) {
+        if (isMounted) {
+          setGoals([]);
+          setIsLoading(false);
+        }
+        return;
+      }
       
       try {
-        setIsLoading(true)
-        const fetchedGoals = await getGoalsByTimeframe(timeframe, user.organizationId)
-        setGoals(fetchedGoals)
+        setIsLoading(true);
+        const fetchedGoals = await getGoalsByTimeframe(timeframe, user.organizationId);
+        if (isMounted) {
+          setGoals(fetchedGoals);
+        }
       } catch (error) {
-        console.error('Error loading goals:', error)
+        console.error('Error loading goals:', error);
+        if (isMounted) {
+          setGoals([]);
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
-    loadGoals()
+    loadGoals();
+
+    return () => {
+      isMounted = false;
+    };
   }, [timeframe, user?.organizationId])
 
   // Subscribe to goal events
   useEffect(() => {
+    if (!user?.organizationId) return;
+
     const handleGoalCreated = (newGoal: Goal) => {
       if (newGoal.timeframe === timeframe) {
-        // Immediately update the state with the new goal
-        setGoals(prevGoals => [...prevGoals, newGoal])
+        setGoals(prevGoals => {
+          // Check if goal already exists
+          const exists = prevGoals.some(g => g.id === newGoal.id)
+          if (exists) return prevGoals
+          return [...prevGoals, newGoal]
+        })
       }
     }
 
     const handleGoalUpdated = (updatedGoal: Goal) => {
       if (updatedGoal.timeframe === timeframe) {
-        // Immediately update the state with the updated goal
         setGoals(prevGoals => 
           prevGoals.map(goal => 
             goal.id === updatedGoal.id ? updatedGoal : goal
@@ -90,7 +114,6 @@ export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
     }
 
     const handleGoalDeleted = (goalId: string) => {
-      // Immediately update the state by removing the deleted goal
       setGoals(prevGoals => prevGoals.filter(goal => goal.id !== goalId))
     }
 
@@ -105,16 +128,19 @@ export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
       eventBus.off('goalUpdated', handleGoalUpdated)
       eventBus.off('goalDeleted', handleGoalDeleted)
     }
-  }, [timeframe])
+  }, [timeframe, user?.organizationId])
+
+  if (!user?.organizationId) {
+    return null;
+  }
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
           <Card key={i} className="p-6 animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
-            <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
           </Card>
         ))}
       </div>
@@ -123,77 +149,64 @@ export function GoalsList({ timeframe, onCreateClick }: GoalsListProps) {
 
   if (goals.length === 0) {
     return (
-      <Card className="p-12 text-center">
-        <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
-          <Target className="h-10 w-10 text-primary" />
+      <Card className="p-8 text-center">
+        <div className="max-w-md mx-auto">
+          <Target className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">{emptyState.title}</h3>
+          <p className="text-muted-foreground mb-6">{emptyState.description}</p>
+          <Button onClick={onCreateClick} className="gap-2">
+            <Sparkles className="h-4 w-4" />
+            Create Your First Goal
+          </Button>
         </div>
-        <h3 className="text-2xl font-semibold mb-3">{emptyState.title}</h3>
-        <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-          {emptyState.description}
-        </p>
-        <Button onClick={onCreateClick} size="lg" className="gap-2">
-          <Sparkles className="h-4 w-4" />
-          Create {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Goal
-        </Button>
       </Card>
     )
-  }
-
-  const getTotalMetricsCount = (goal: Goal) => {
-    const topLevelMetrics = goal.metrics?.length || 0
-    const keyResultMetrics = goal.keyResults?.reduce((total, kr) => total + (kr.metrics?.length || 0), 0) || 0
-    return topLevelMetrics + keyResultMetrics
   }
 
   return (
     <div className="space-y-4">
       {goals.map((goal) => (
-        <Link 
-          key={goal.id} 
-          href={`/dashboard/goals/${goal.timeframe}/${goal.id}`}
-        >
-          <Card className="p-6 hover:bg-muted/50 transition-colors">
+        <Link key={goal.id} href={`/dashboard/goals/${timeframe}/${goal.id}`}>
+          <Card className="p-6 hover:shadow-md transition-shadow cursor-pointer">
             <div className="flex items-start justify-between">
               <div className="space-y-4 flex-1">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-semibold">{goal.title}</h3>
-                    <Badge variant="secondary" className="capitalize">{goal.type}</Badge>
+                    <h3 className="text-lg font-medium">{goal.title}</h3>
+                    <Badge variant={goal.status === 'completed' ? 'success' : goal.status === 'at_risk' ? 'destructive' : 'default'}>
+                      {goal.status.replace('_', ' ')}
+                    </Badge>
                   </div>
-                  <p className="text-muted-foreground line-clamp-2">{goal.description}</p>
+                  <p className="text-muted-foreground">{goal.description}</p>
                 </div>
 
-                <div className="flex items-center gap-6 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>Progress</span>
+                    <span>{goal.progress}%</span>
+                  </div>
+                  <Progress value={goal.progress} className="h-2" />
+                </div>
+
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    <span>
-                      {formatDate(goal.startDate, dateFormat)} - {formatDate(goal.endDate, dateFormat)}
-                    </span>
+                    <span>{formatDate(goal.endDate, dateFormat)}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Flag className="h-4 w-4" />
-                    <span className="capitalize">{goal.priority} Priority</span>
-                  </div>
-                  {goal.assignees?.length > 0 && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
+                  {goal.assignees && goal.assignees.length > 0 && (
+                    <div className="flex items-center gap-1">
                       <Users2 className="h-4 w-4" />
-                      <span>{goal.assignees.length} Assignees</span>
+                      <span>{goal.assignees.length} assignees</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Target className="h-4 w-4" />
-                    <span>{getTotalMetricsCount(goal)} Metrics</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <Progress value={goal.progress || 0} className="h-2" />
-                  </div>
-                  <span className="text-sm font-medium">{goal.progress || 0}%</span>
+                  {goal.priority && (
+                    <div className="flex items-center gap-1">
+                      <Flag className="h-4 w-4" />
+                      <span>{goal.priority}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </div>
           </Card>

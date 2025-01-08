@@ -13,6 +13,7 @@ import { Team } from '@/types/teams'
 import { useToast } from '@/components/ui/use-toast'
 import { useTeamVisibility } from '@/contexts/TeamVisibilityContext'
 import Image from 'next/image'
+import { getOrganization } from '@/services/organizationService'
 
 // Enable offline persistence
 try {
@@ -117,13 +118,12 @@ export function Sidebar() {
     if (!user?.organizationId) return
     
     try {
-      const orgRef = doc(db, 'organizations', user.organizationId)
-      const orgDoc = await getDoc(orgRef)
-      if (!orgDoc.exists()) {
+      const organization = await getOrganization(user.organizationId)
+      if (!organization) {
         setError('Organization not found')
         return
       }
-      setOrganizationName(orgDoc.data().name)
+      setOrganizationName(organization.name)
     } catch (error) {
       console.error('Error loading organization:', error)
       setError('Failed to load organization')

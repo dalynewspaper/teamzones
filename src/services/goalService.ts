@@ -457,4 +457,27 @@ export function subscribeToChildGoals(
     const goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
     callback(goals);
   });
+}
+
+export async function getGoals(): Promise<Goal[]> {
+  const goalsCollection = collection(db, 'goals')
+  const querySnapshot = await getDocs(goalsCollection)
+  
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data()
+    return {
+      id: doc.id,
+      ...data,
+      startDate: data.startDate?.toDate() || new Date(),
+      endDate: data.endDate?.toDate() || new Date(),
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+      metrics: data.metrics || [],
+      keyResults: data.keyResults || [],
+      milestones: data.milestones || [],
+      assignees: data.assignees || [],
+      tags: data.tags || [],
+      teamRoles: data.teamRoles || []
+    } as Goal
+  })
 } 
